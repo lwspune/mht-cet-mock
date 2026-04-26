@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
+model User {
+  id        String   @id // matches Supabase auth.users.id (UUID)
+  email     String   @unique
+  name      String
+  role      Role     @default(STUDENT)
+  createdBy String?  // teacher id who created this student
+  createdAt DateTime @default(now())
+
+  teacher         User?         @relation("TeacherStudents", fields: [createdBy], references: [id])
+  students        User[]        @relation("TeacherStudents")
+  createdMocks    Mock[]        @relation("CreatedMocks")
+  attempts        MockAttempt[]
+
+  @@map("users")
+}
+
+model Subject {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  chapters Chapter[]
+  mocks    Mock[]
+
+  @@map("subjects")
+}
+
+model Chapter {
+  id         String     @id @default(cuid())
+  subjectId  String
+  name       String
+  orderIndex Int
+  subject    Subject    @relation(fields: [subjectId], references: [id])
+  questions  Question[]
+
+  @@unique([subjectId, orderIndex])
+  @@map("chapters")
+}
+
+model Mock {
+  id           String   @id @default(cuid())
+  title        String
+  subjectId    String
+  createdBy    String
+  durationMins Int      @default(180)
+  marksCorrect Float    @default(2)
+  marksWrong   Float    @default(0)
+  isPublished  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  subject   Subject       @relation(fields: [subjectId], references: [id])
+  creator   User          @relation("CreatedMocks", fields: [createdBy], references: [id])
+  questions Question[]
+  attempts  MockAttempt[]
+
+  @@map("mocks")
+}
+
+model Question {
+  id         String  @id @default(cuid())
+  mockId     String
+  chapterId  String
+  text       String  // plain text + LaTeX via $...$ and $$...$$ delimiters
+  imageUrl   String?
+  orderIndex Int
+  marks      Float   @default(2)
+  negMarks   Float   @default(0)
+
+  mock    Mock            @relation(fields: [mockId], references: [id], onDelete: Cascade)
+  chapter Chapter         @relation(fields: [chapterId], references: [id])
+  options Option[]
+  answers AttemptAnswer[]
+  solution String?
+
+  @@map("questions")
+}
+
+model Option {
+  id         String  @id @default(cuid())
+  questionId String
+  text       String
+  imageUrl   String?
+  isCorrect  Boolean @default(false)
+
+  question Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  AttemptAnswer[]
+
+  @@map("options")
+}
+
+model MockAttempt {
+  id          String        @id @default(cuid())
+  mockId      String
+  studentId   String
+  startedAt   DateTime      @default(now())
+  submittedAt DateTime?
+  status      AttemptStatus @default(IN_PROGRESS)
+  score       Float?
+  maxScore    Float?
+
+  mock    Mock            @relation(fields: [mockId], references: [id])
+  student User            @relation(fields: [studentId], references: [id])
+  answers AttemptAnswer[]
+
+  @@unique([mockId, studentId]) // one attempt per student per mock
+  @@map("mock_attempts")
+}
+
+model AttemptAnswer {
+  id               String   @id @default(cuid())
+  attemptId        String
+  questionId       String
+  selectedOptionId String?  // null = unattempted
+  isCorrect        Boolean?
+  timeSpentSecs    Int      @default(0)
+  isFlagged        Boolean  @default(false)
+
+  attempt        MockAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question       Question    @relation(fields: [questionId], references: [id])
+  selectedOption Option?     @relation(fields: [selectedOptionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@map("attempt_answers")
+}
