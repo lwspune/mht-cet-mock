@@ -2,15 +2,104 @@
 
 import { useState } from 'react'
 import KatexRenderer from '@/components/math/KatexRenderer'
-import { Badge } from '@/components/ui/badge'
 import type { UnattemptedQuestion } from '@/types'
 
 interface Props {
   data: UnattemptedQuestion[]
 }
 
+function groupLabel(item: UnattemptedQuestion): string {
+  return item.subtopicName ?? item.chapterName
+}
+
+function UnattemptedCard({ item, index }: { item: UnattemptedQuestion; index: number }) {
+  const [showSolution, setShowSolution] = useState(false)
+
+  return (
+    <div className="rounded-lg border bg-card p-4 text-sm">
+      {/* Header */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          Q{index}
+        </span>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {item.chapterName}
+        </span>
+        <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+          Unattempted
+        </span>
+      </div>
+
+      {/* Question text */}
+      <div className="mb-3 leading-relaxed">
+        <KatexRenderer text={item.questionText} />
+      </div>
+
+      {/* Question image */}
+      {item.questionImageUrl && (
+        <img
+          src={item.questionImageUrl}
+          alt="Question diagram"
+          className="mb-3 max-h-48 rounded object-contain"
+        />
+      )}
+
+      {/* Options */}
+      <div className="flex flex-col gap-2">
+        {item.options.map((opt, i) => {
+          const cls = opt.isCorrect
+            ? 'rounded border px-3 py-2 border-green-400 bg-green-50 text-green-900'
+            : 'rounded border px-3 py-2 border-border bg-background text-foreground'
+
+          return (
+            <div key={i} className={cls}>
+              <div className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0">
+                  {opt.isCorrect ? (
+                    <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <span className="block h-4 w-4" />
+                  )}
+                </span>
+                <KatexRenderer text={opt.text} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Solution */}
+      {item.solution && (
+        <div className="mt-3 border-t pt-3">
+          <button
+            onClick={() => setShowSolution((v) => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <svg
+              className={`h-3.5 w-3.5 transition-transform ${showSolution ? 'rotate-90' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            {showSolution ? 'Hide solution' : 'Show solution'}
+          </button>
+          {showSolution && (
+            <div className="mt-2 rounded bg-muted/50 px-3 py-2 text-muted-foreground leading-relaxed">
+              <KatexRenderer text={item.solution} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function UnattemptedAudit({ data }: Props) {
-  const [subjectFilter, setSubjectFilter] = useState('All')
+  const [subjectFilter, setSubjectFilter] = useState<string>('All')
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
+
   const subjects = ['All', ...Array.from(new Set(data.map((d) => d.subjectName)))]
   const filtered = subjectFilter === 'All' ? data : data.filter((d) => d.subjectName === subjectFilter)
 
@@ -18,13 +107,26 @@ export default function UnattemptedAudit({ data }: Props) {
     return <p className="text-center py-10 text-muted-foreground">No unattempted questions. Excellent!</p>
   }
 
+  const groupMap = new Map<string, UnattemptedQuestion[]>()
+  for (const item of filtered) {
+    const label = groupLabel(item)
+    if (!groupMap.has(label)) groupMap.set(label, [])
+    groupMap.get(label)!.push(item)
+  }
+  const groups = Array.from(groupMap.entries())
+    .map(([label, items]) => ({ label, items, count: items.length }))
+    .sort((a, b) => b.count - a.count)
+
+  const detailItems = selectedGroup ? (groupMap.get(selectedGroup) ?? []) : []
+
   return (
     <div className="space-y-4">
+      {/* Subject filter */}
       <div className="flex gap-2 flex-wrap">
         {subjects.map((s) => (
           <button
             key={s}
-            onClick={() => setSubjectFilter(s)}
+            onClick={() => { setSubjectFilter(s); setSelectedGroup(null) }}
             className={`rounded-full px-3 py-1 text-sm font-medium border transition-colors ${
               subjectFilter === s
                 ? 'bg-primary text-primary-foreground border-primary'
@@ -36,22 +138,49 @@ export default function UnattemptedAudit({ data }: Props) {
         ))}
       </div>
 
-      <p className="text-sm text-muted-foreground">{filtered.length} unattempted question(s)</p>
-
-      {filtered.map((item, i) => (
-        <div key={`${item.questionId}-${i}`} className="rounded-lg border p-4 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className="text-xs">{item.subjectName}</Badge>
-            <Badge variant="secondary" className="text-xs">{item.chapterName}</Badge>
-            <span className="text-xs text-muted-foreground ml-auto truncate max-w-[200px]">
-              {item.mockTitle}
+      {selectedGroup === null ? (
+        /* ── View 1: subtopic list ── */
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} unattempted question(s) across {groups.length} subtopic(s)
+          </p>
+          {groups.map(({ label, count }) => (
+            <button
+              key={label}
+              onClick={() => setSelectedGroup(label)}
+              className="w-full flex items-center justify-between rounded-lg border px-4 py-3 text-left hover:bg-accent transition-colors"
+            >
+              <span className="text-sm font-medium">{label}</span>
+              <span className="flex items-center gap-2">
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                  {count} unattempted
+                </span>
+                <span className="text-muted-foreground text-xs">›</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        /* ── View 2: question cards for selected subtopic ── */
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSelectedGroup(null)}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              ← Back
+            </button>
+            <span className="text-sm font-semibold">{selectedGroup}</span>
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+              {detailItems.length} unattempted
             </span>
           </div>
-          <div className="text-sm leading-relaxed">
-            <KatexRenderer text={item.questionText} />
-          </div>
+
+          {detailItems.map((item, i) => (
+            <UnattemptedCard key={`${item.questionId}-${i}`} item={item} index={i + 1} />
+          ))}
         </div>
-      ))}
+      )}
     </div>
   )
 }

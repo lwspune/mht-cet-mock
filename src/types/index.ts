@@ -127,13 +127,21 @@ export interface WrongAnswer {
   negMarks: number
 }
 
+export interface UnattemptedOption {
+  text: string
+  imageUrl?: string | null
+  isCorrect: boolean
+}
+
 export interface UnattemptedQuestion {
   questionId: string
   questionText: string
   questionImageUrl?: string | null
   chapterName: string
+  subtopicName: string | null
   subjectName: string
-  mockTitle: string
+  solution: string | null
+  options: UnattemptedOption[]
 }
 
 export type ReviewFilter = 'correct' | 'wrong' | 'unattempted'
