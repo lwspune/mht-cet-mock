@@ -15,8 +15,6 @@ const createdMocks: unknown[] = []
 const createdQuestions: unknown[] = []
 const createdOptions: unknown[] = []
 
-let questionCounter = 0
-
 const mockTransaction = vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
   const mockId = `mock-${Math.random().toString(36).slice(2)}`
   const tx = {
@@ -28,10 +26,9 @@ const mockTransaction = vi.fn().mockImplementation(async (fn: (tx: unknown) => P
       }),
     },
     question: {
-      create: vi.fn().mockImplementation(({ data }: { data: unknown }) => {
-        const qId = `q-${++questionCounter}`
-        createdQuestions.push({ id: qId, mockId, ...data as object })
-        return Promise.resolve({ id: qId, ...data as object })
+      createMany: vi.fn().mockImplementation(({ data }: { data: unknown[] }) => {
+        createdQuestions.push(...data)
+        return Promise.resolve({ count: data.length })
       }),
     },
     option: {
@@ -118,7 +115,6 @@ describe('POST /api/mocks/import', () => {
     createdMocks.length = 0
     createdQuestions.length = 0
     createdOptions.length = 0
-    questionCounter = 0
     mockTransaction.mockClear()
   })
 

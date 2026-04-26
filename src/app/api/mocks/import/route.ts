@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
@@ -89,6 +90,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Phase 2: All validation passed — run one transaction per mock in parallel.
+  // Pre-generate question IDs so we can batch both creates in two round-trips
+  // instead of 50 individual question.create calls (which times out on Vercel Hobby).
   const results = await Promise.all(
     validatedMocks.map(({ title, subjectId, resolved }) =>
       db.$transaction(async (tx) => {
@@ -103,28 +106,23 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // Create questions without nested options to keep each statement small
-        const createdQuestions = await Promise.all(
-          resolved.map((q, i) =>
-            tx.question.create({
-              data: {
-                mockId: mock.id,
-                chapterId: q.chapterId,
-                text: q.text,
-                marks: marksCorrect,
-                negMarks: marksWrong,
-                orderIndex: i + 1,
-                solution: q.solution,
-              },
-            })
-          )
-        )
+        const questionData = resolved.map((q, i) => ({
+          id: randomUUID(),
+          mockId: mock.id,
+          chapterId: q.chapterId,
+          text: q.text,
+          marks: marksCorrect,
+          negMarks: marksWrong,
+          orderIndex: i + 1,
+          solution: q.solution,
+        }))
 
-        // Batch all option inserts in one statement instead of N round-trips
+        await tx.question.createMany({ data: questionData })
+
         await tx.option.createMany({
           data: resolved.flatMap((q, i) =>
             q.options.map((optText, idx) => ({
-              questionId: createdQuestions[i].id,
+              questionId: questionData[i].id,
               text: optText,
               isCorrect: idx === q.correctIndex,
             }))
