@@ -170,10 +170,31 @@ Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Pr
 | `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (17 tests) |
 | `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (16 tests) |
 
-## Vercel Deployment — Known Blockers
-Not yet deployed. Before deploying:
+## Vercel Deployment
 
-1. **`prisma generate --no-engine`** — check `package.json` `postinstall`. If `--no-engine` is present, remove it; it only applies to local Windows dev (VSCode DLL lock). Vercel's Linux build must run `prisma generate` without it.
-2. **DB connection pooling** — direct port 5432 + Vercel serverless = connection exhaustion under load. The Supabase transaction pooler (port 6543) currently doesn't work with this project's credentials. Recommended fix: use **Prisma Accelerate** (free tier) — replaces `DATABASE_URL` with a `prisma://` URL, handles pooling, and is compatible with `--no-engine` if that path is chosen.
-3. **Function timeout** — Hobby plan has 10s limit. Import route runs up to 3 sequential transactions; upgrade to Pro (60s limit) or migrate to Prisma Accelerate which is faster over its edge network.
-4. **Env vars to set in Vercel dashboard**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `DIRECT_URL`.
+**Live at:** https://mhtcetmock.vercel.app  
+**GitHub:** https://github.com/lwspune/mht-cet-mock
+
+### DB Connection — Prisma Accelerate
+Direct Postgres (port 5432) is unreachable from Vercel. Supabase pooler (both session and transaction modes) gives "Tenant or user not found". Solution: **Prisma Accelerate**.
+
+- `@prisma/extension-accelerate` is installed
+- `src/lib/db.ts` uses `withAccelerate()` cast to `PrismaClient` to preserve TypeScript types
+- `DATABASE_URL` in Vercel = `prisma://accelerate.prisma-data.net/?api_key=...`
+- `DIRECT_URL` in Vercel = direct Supabase URL (for local `prisma db push` / `db seed` only)
+- Prisma console: console.prisma.io → MHT_CET project → MHT_CET environment (NOT "Development" — that is an empty Prisma-hosted DB)
+- **postinstall must be `prisma generate --no-engine`** for Accelerate on Vercel serverless
+
+### Known Issue (as of last session)
+Infinite redirect loop at `/` and `/login` — not yet resolved. Likely cause: Prisma Accelerate query failing in `getUser()` causing null return, then middleware loop between `/` and `/login`. Next steps:
+1. Update `postinstall` to `prisma generate --no-engine`
+2. Check Supabase auth redirect URLs include `https://mhtcetmock.vercel.app`
+3. Check Vercel runtime logs for actual error in the redirect path
+
+### MCP (local dev only)
+- `.mcp.json` in project root — **gitignored**, contains Supabase PAT. Never commit this file.
+- Supabase MCP connects to project ref `pcsxkciizsmzsfyqqjhv`
+- Vercel MCP in `~/.claude/mcp.json` globally. Both use `"type": "http"` (not `"transport"`)
+
+### Env vars in Vercel
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (prisma:// URL), `DIRECT_URL` (postgres:// direct URL).
