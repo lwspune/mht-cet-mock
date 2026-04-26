@@ -9,6 +9,7 @@ const updateSchema = z.object({
   marksCorrect: z.number().optional(),
   marksWrong: z.number().optional(),
   isPublished: z.boolean().optional(),
+  allowReattempt: z.boolean().optional(),
 })
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
