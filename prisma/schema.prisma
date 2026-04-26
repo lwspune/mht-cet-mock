@@ -56,15 +56,16 @@ model Chapter {
 }
 
 model Mock {
-  id           String   @id @default(cuid())
-  title        String
-  subjectId    String
-  createdBy    String
-  durationMins Int      @default(180)
-  marksCorrect Float    @default(2)
-  marksWrong   Float    @default(0)
-  isPublished  Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  title          String
+  subjectId      String
+  createdBy      String
+  durationMins   Int      @default(180)
+  marksCorrect   Float    @default(2)
+  marksWrong     Float    @default(0)
+  isPublished    Boolean  @default(false)
+  allowReattempt Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   subject   Subject       @relation(fields: [subjectId], references: [id])
   creator   User          @relation("CreatedMocks", fields: [createdBy], references: [id])
