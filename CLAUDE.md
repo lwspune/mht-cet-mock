@@ -95,7 +95,9 @@ Schema in `prisma/schema.prisma`. Key invariants:
 - Score: `+marksCorrect` (correct), `-marksWrong` (wrong + selected), `0` (null selectedOptionId)
 - Performance data is derived from `attempt_answers` joined with `chapters` — no denormalized counters
 - `Mock.allowReattempt Boolean @default(false)` — teacher-controlled gate; when true, students may delete their submitted attempt and start fresh via `DELETE /api/attempts/[id]`
-- Deleting a `MockAttempt` cascades to all its `AttemptAnswer` rows (no manual cleanup needed)
+- `Question.solution String?` — optional explanation, supports KaTeX. Populated by xlsx import; editable in QuestionEditor.
+- `Question.subtopicName String?` — nullable; populated from xlsx `Subtopic` column at import time. Manually-added questions have null.
+- Deleting a `Mock` cascades to `Question`, `MockAttempt` → `AttemptAnswer` (full cascade chain). `AttemptAnswer.questionId` is CASCADE (not RESTRICT) — critical for mock deletion to work when attempts exist.
 
 After schema changes: `npx prisma db push` then `npx prisma generate`
 > Local dev workaround: if VSCode holds the Prisma engine DLL, use `npx prisma generate --no-engine` to unblock. Do NOT use `--no-engine` in CI or production builds — it produces a client that requires a `prisma://` Accelerate URL.
@@ -138,7 +140,7 @@ npm run dev          # start dev server
 npm run db:push      # push schema changes to Supabase
 npm run db:seed      # seed subjects + chapters (idempotent upserts)
 npx prisma studio    # browse DB in browser
-npx vitest           # run all tests (79 tests across 6 suites)
+npx vitest           # run all tests (93 tests across 7 suites)
 npx vitest run       # run once (no watch mode)
 ```
 
@@ -157,6 +159,7 @@ npx vitest run       # run once (no watch mode)
 | `src/components/teacher/AddStudentDialog.tsx` | Add student modal |
 | `src/components/teacher/ResetAttemptsButton.tsx` | Bulk-reset all student attempts for a mock (with confirmation) |
 | `src/components/teacher/ResetAttemptButton.tsx` | Reset one student's attempt from performance page (with confirmation) |
+| `src/components/teacher/DeleteMockButton.tsx` | Delete mock with inline confirmation (calls DELETE /api/mocks/[id]) |
 | `src/components/student/ReattemptButton.tsx` | Student reattempt with score warning + confirmation |
 | `src/components/teacher/ImportMockButton.tsx` | Client wrapper that opens the import dialog |
 | `src/components/teacher/ImportMockDialog.tsx` | 4-step import dialog: upload → review → importing → done |
@@ -184,20 +187,40 @@ Required headers (exact): `Q`, `Subject`, `Course`, `Chapter`, `Subtopic`, `Ques
 - Empty option cells (e.g. Q117 Maths/Limits OptionC blank) → replaced with `—` placeholder at parse time
 - Chapter appears under wrong subject in xlsx (e.g. "Magnetic Materials" listed under Chemistry) → cross-resolved to correct subject, warning emitted, teacher can Skip
 - Answer letter must be A/B/C/D (case-insensitive); invalid answer → question skipped with warning
+- Empty `Subtopic` cell → stored as `null` (not empty string); questions group by `chapterName` as fallback in performance UI
 
 ## Tests
 Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Prisma client requires a live DB URL which isn't available in test environment.
 
-**79 tests, 6 suites** — `npx vitest run`
+**93 tests, 7 suites** — `npx vitest run`
 
 | File | Coverage |
 |---|---|
 | `src/lib/__tests__/import-utils.test.ts` | `convertLatex`, `answerLetterToIndex`, `deriveTitleFromFilename` (22 tests) |
-| `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (17 tests) |
-| `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (16 tests) |
-| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409 (10 tests) |
+| `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (18 tests, incl. subtopicName) |
+| `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (18 tests, incl. subtopicName + solution) |
+| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution field (12 tests) |
 | `src/app/api/mocks/[id]/attempts/__tests__/attempts.test.ts` | DELETE bulk-reset — auth, ownership, count (4 tests) |
 | `src/app/api/attempts/__tests__/attempt.test.ts` | DELETE attempt — teacher + student auth paths, allowReattempt gate (8 tests) |
+
+## Student Performance Dashboard
+`/student/performance` — 4-tab server component, data fetched in parallel via `Promise.all`.
+
+| Tab | Component | Data source |
+|---|---|---|
+| Exam-wise | `ExamWiseChart` (Recharts) | `getExamPerformance()` |
+| Chapter-wise | `ChapterWiseChart` (Recharts) | `getChapterPerformance()` |
+| Wrong Answers | `WrongAudit` | `getWrongAnswers()` |
+| Unattempted | `UnattemptedAudit` | `getUnattemptedQuestions()` |
+
+### Chapter-wise Chart
+Single `% correct` bar per chapter, sorted ascending (weakest first). Color-coded: red < 40% (weak), amber 40–70% (moderate), green ≥ 70% (strong). Inline value labels. Subject filter via `PerformanceTabs`.
+
+### Wrong Answers + Unattempted (same UX pattern)
+Two-view drill-down:
+1. **Subtopic list** — groups by `subtopicName` (falls back to `chapterName` if null), sorted worst-first (highest count at top), colored badge.
+2. **Question cards** — click subtopic to drill in. Cards match exam review format: Q{n} badge, chapter pill, status badge, all 4 options (green ✓ correct, red ✗ selected-wrong / gray for unattempted), Show/Hide solution toggle.
+Back button returns to subtopic list. Subject filter resets to list view.
 
 ## Vercel Deployment
 
