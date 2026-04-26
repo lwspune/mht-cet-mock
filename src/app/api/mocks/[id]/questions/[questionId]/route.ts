@@ -14,6 +14,7 @@ const updateSchema = z.object({
   chapterId: z.string().min(1),
   text: z.string().min(1),
   imageUrl: z.string().optional(),
+  solution: z.string().optional(),
   marks: z.number(),
   negMarks: z.number(),
   options: z.array(optionUpdateSchema).length(4),
@@ -44,12 +45,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { chapterId, text, imageUrl, marks, negMarks, options } = parsed.data
+  const { chapterId, text, imageUrl, solution, marks, negMarks, options } = parsed.data
 
   await db.$transaction([
     db.question.update({
       where: { id: params.questionId },
-      data: { chapterId, text, imageUrl: imageUrl ?? null, marks, negMarks },
+      data: { chapterId, text, imageUrl: imageUrl ?? null, solution: solution ?? null, marks, negMarks },
     }),
     ...options.map((opt) =>
       db.option.update({

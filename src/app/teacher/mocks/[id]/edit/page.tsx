@@ -112,6 +112,7 @@ export default async function EditMockPage({ params }: { params: { id: string } 
                       text: q.text,
                       chapterId: q.chapterId,
                       imageUrl: q.imageUrl,
+                      solution: q.solution,
                       marks: q.marks,
                       negMarks: q.negMarks,
                       options: q.options.map((o) => ({

@@ -128,6 +128,24 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
     const res = await PATCH(patchRequest(makePayload()), routeParams)
     expect(res.status).toBe(404)
   })
+
+  it('passes solution to db.question.update when provided', async () => {
+    await PATCH(patchRequest(makePayload({ solution: 'Because $x = 1$' })), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ solution: 'Because $x = 1$' }),
+      })
+    )
+  })
+
+  it('sets solution to null when omitted', async () => {
+    await PATCH(patchRequest(makePayload()), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ solution: null }),
+      })
+    )
+  })
 })
 
 describe('DELETE /api/mocks/[id]/questions/[questionId]', () => {
