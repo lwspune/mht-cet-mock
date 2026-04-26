@@ -75,7 +75,10 @@ export default async function MocksPage() {
                     <CardContent className="flex-1">
                       {isSubmitted && attempt && (
                         <div className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800">
-                          Completed · Score: {attempt.score?.toFixed(1)}/{attempt.maxScore?.toFixed(1)}
+                          <div>Completed · Score: {attempt.score?.toFixed(1)}/{attempt.maxScore?.toFixed(1)}</div>
+                          {mock.allowReattempt && (
+                            <div className="mt-0.5 text-green-700">Reattempt available</div>
+                          )}
                         </div>
                       )}
                       {isInProgress && (
@@ -85,9 +88,16 @@ export default async function MocksPage() {
                       )}
                     </CardContent>
                     <CardFooter>
-                      <Button asChild size="sm" variant={isSubmitted ? 'outline' : 'default'} className="w-full">
+                      <Button
+                        asChild
+                        size="sm"
+                        variant={isSubmitted && !mock.allowReattempt ? 'outline' : 'default'}
+                        className="w-full"
+                      >
                         <Link href={`/student/mocks/${mock.id}`}>
-                          {isSubmitted ? 'View Mock' : isInProgress ? 'Resume' : 'Start Mock'}
+                          {isSubmitted
+                            ? mock.allowReattempt ? 'Reattempt' : 'View Mock'
+                            : isInProgress ? 'Resume' : 'Start Mock'}
                         </Link>
                       </Button>
                     </CardFooter>

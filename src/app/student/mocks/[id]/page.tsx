@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDuration } from '@/lib/utils'
+import ReattemptButton from '@/components/student/ReattemptButton'
 
 export default async function MockDetailPage({ params }: { params: { id: string } }) {
   const user = await requireRole('STUDENT')
@@ -80,17 +81,28 @@ export default async function MockDetailPage({ params }: { params: { id: string 
 
       {isSubmitted && attempt && (
         <div className="rounded-lg border bg-green-50 p-4 text-sm text-green-800">
-          You have already submitted this mock. Score: {attempt.score?.toFixed(1)} / {attempt.maxScore?.toFixed(1)}
+          <span className="font-medium">Submitted</span> · Score:{' '}
+          {attempt.score?.toFixed(1)} / {attempt.maxScore?.toFixed(1)}
+          {mock.allowReattempt && (
+            <span className="ml-2 text-xs text-green-700">· Reattempt available</span>
+          )}
         </div>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         {!isSubmitted && (
           <Button asChild size="lg" className="flex-1">
             <Link href={`/student/mocks/${mock.id}/attempt`}>
               {isInProgress ? 'Resume Exam' : 'Start Exam'}
             </Link>
           </Button>
+        )}
+        {isSubmitted && attempt && mock.allowReattempt && (
+          <ReattemptButton
+            attemptId={attempt.id}
+            mockId={mock.id}
+            previousScore={`${attempt.score?.toFixed(1)} / ${attempt.maxScore?.toFixed(1)}`}
+          />
         )}
         <Button variant="outline" asChild>
           <Link href="/student/mocks">Back to Mocks</Link>
