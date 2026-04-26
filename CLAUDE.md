@@ -50,38 +50,52 @@ Two roles: **Teacher** (creates mocks, manages students) and **Student** (attemp
 
 /teacher/dashboard       → teacher home
 /teacher/students        → student list + add student
-/teacher/students/[id]/performance → view a student's performance
+/teacher/students/[id]/performance → view a student's performance (+ per-attempt Reset buttons)
 /teacher/mocks           → mock list (+ Import button)
 /teacher/mocks/new       → create mock
-/teacher/mocks/[id]/edit → edit mock + manage questions
+/teacher/mocks/[id]/edit → edit mock + manage questions + Reset All Attempts
 
 /student/dashboard       → student home
-/student/mocks           → browse published mocks
-/student/mocks/[id]      → mock detail
+/student/mocks           → browse published mocks (Reattempt CTA if allowed)
+/student/mocks/[id]      → mock detail + Reattempt button if allowed
 /student/mocks/[id]/attempt → exam UI (timer, navigator, auto-save)
 /student/performance     → 4-tab performance dashboard
 
+/api/mocks               → GET (list), POST (create)
+/api/mocks/[id]          → GET, PATCH (title/duration/marks/isPublished/allowReattempt), DELETE
+/api/mocks/[id]/attempts → DELETE: teacher bulk-reset all attempts for a mock
+/api/mocks/[id]/questions → GET, POST
+/api/mocks/[id]/questions/[questionId] → PATCH, DELETE
+/api/attempts            → POST: start or resume attempt
+/api/attempts/[id]       → DELETE: teacher (any attempt on own mock) or student (own, if allowReattempt)
+/api/attempts/[id]/answers → GET, PATCH (auto-save)
+/api/attempts/[id]/submit  → POST: score + mark SUBMITTED
 /api/mocks/import/parse  → POST: upload .xlsx → returns preview JSON (ParseResponse)
 /api/mocks/import        → POST: commits previewed mocks to DB (ImportRequest → ImportResponse)
 ```
 
 ## Auth Pattern — Critical
-Two separate helpers in `src/lib/auth.ts`. **Never mix them up.**
+Three helpers in `src/lib/auth.ts`. **Never mix them up.**
 
 | Context | Helper | On failure |
 |---|---|---|
 | Page / Layout (Server Component) | `requireRole('TEACHER')` | Next.js `redirect()` |
-| API route | `apiRequireRole('TEACHER')` | Returns `NextResponse` 401/403 |
+| API route — single role | `apiRequireRole('TEACHER')` | Returns `NextResponse` 401/403 |
+| API route — any auth'd user | `apiAuth()` | Returns `NextResponse` 401 |
 
 API routes must check: `if ('error' in auth) return auth.error`
+
+Use `apiAuth()` when the same endpoint serves both teachers and students (e.g. `DELETE /api/attempts/[id]`); branch on `user.role` inside the handler.
 
 ## Database
 Schema in `prisma/schema.prisma`. Key invariants:
 - `User.id` === Supabase `auth.users.id` (UUID) — must match on creation
-- `MockAttempt` is unique per `[mockId, studentId]` — one attempt per student per mock
+- `MockAttempt` is unique per `[mockId, studentId]` — one active attempt per student per mock
 - `AttemptAnswer.selectedOptionId = null` means unattempted (not wrong)
 - Score: `+marksCorrect` (correct), `-marksWrong` (wrong + selected), `0` (null selectedOptionId)
 - Performance data is derived from `attempt_answers` joined with `chapters` — no denormalized counters
+- `Mock.allowReattempt Boolean @default(false)` — teacher-controlled gate; when true, students may delete their submitted attempt and start fresh via `DELETE /api/attempts/[id]`
+- Deleting a `MockAttempt` cascades to all its `AttemptAnswer` rows (no manual cleanup needed)
 
 After schema changes: `npx prisma db push` then `npx prisma generate`
 > Local dev workaround: if VSCode holds the Prisma engine DLL, use `npx prisma generate --no-engine` to unblock. Do NOT use `--no-engine` in CI or production builds — it produces a client that requires a `prisma://` Accelerate URL.
@@ -105,6 +119,8 @@ Use it anywhere question text or option text is displayed. Never render question
 - Timer derived from `startedAt` (server-set) to prevent client manipulation
 - On submit: flushes pending saves first, then calls `/api/attempts/[id]/submit`
 
+**Stale closure fix (critical):** `scheduleSave` uses `pendingSavesRef` (a `Map` ref) instead of reading from the React `answers` state. Values are passed directly into `scheduleSave(qid, selectedOptionId, isFlagged)` at call time. This prevents the debounce timer from sending stale `null` values to the server — the bug that caused answered questions to save as unattempted.
+
 ## Env Variables
 ```
 NEXT_PUBLIC_SUPABASE_URL        # Supabase project URL
@@ -122,7 +138,7 @@ npm run dev          # start dev server
 npm run db:push      # push schema changes to Supabase
 npm run db:seed      # seed subjects + chapters (idempotent upserts)
 npx prisma studio    # browse DB in browser
-npx vitest           # run all tests (55 tests across 3 suites)
+npx vitest           # run all tests (79 tests across 6 suites)
 npx vitest run       # run once (no watch mode)
 ```
 
@@ -136,13 +152,21 @@ npx vitest run       # run once (no watch mode)
 | `src/middleware.ts` | Session refresh on every request |
 | `src/components/math/KatexRenderer.tsx` | KaTeX renderer |
 | `src/components/teacher/QuestionEditor.tsx` | Question add/edit with live KaTeX preview + image upload |
+| `src/components/teacher/QuestionEditDialog.tsx` | Edit/delete question dialog (pencil icon on question list) |
+| `src/components/teacher/MockForm.tsx` | Mock settings form — title, duration, marks, allowReattempt checkbox |
 | `src/components/teacher/AddStudentDialog.tsx` | Add student modal |
+| `src/components/teacher/ResetAttemptsButton.tsx` | Bulk-reset all student attempts for a mock (with confirmation) |
+| `src/components/teacher/ResetAttemptButton.tsx` | Reset one student's attempt from performance page (with confirmation) |
+| `src/components/student/ReattemptButton.tsx` | Student reattempt with score warning + confirmation |
 | `src/components/teacher/ImportMockButton.tsx` | Client wrapper that opens the import dialog |
 | `src/components/teacher/ImportMockDialog.tsx` | 4-step import dialog: upload → review → importing → done |
 | `src/lib/import-types.ts` | Shared types: `ParsedQuestion`, `ParseResponse`, `ImportRequest`, `ImportResponse` |
 | `src/lib/import-utils.ts` | Pure helpers: `convertLatex`, `answerLetterToIndex`, `deriveTitleFromFilename` |
 | `src/app/api/mocks/import/parse/route.ts` | xlsx parse API — reads file, resolves chapters, returns preview |
 | `src/app/api/mocks/import/route.ts` | import commit API — validates + writes mocks/questions/options in transactions |
+| `src/app/api/mocks/[id]/questions/[questionId]/route.ts` | PATCH + DELETE for individual questions |
+| `src/app/api/mocks/[id]/attempts/route.ts` | DELETE — teacher bulk-reset all attempts for a mock |
+| `src/app/api/attempts/[id]/route.ts` | DELETE — teacher or student (if allowReattempt) deletes one attempt |
 | `prisma/schema.prisma` | Full DB schema |
 | `prisma/seed.ts` | PCM subjects + chapters seed |
 
@@ -164,11 +188,16 @@ Required headers (exact): `Q`, `Subject`, `Course`, `Chapter`, `Subtopic`, `Ques
 ## Tests
 Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Prisma client requires a live DB URL which isn't available in test environment.
 
+**79 tests, 6 suites** — `npx vitest run`
+
 | File | Coverage |
 |---|---|
 | `src/lib/__tests__/import-utils.test.ts` | `convertLatex`, `answerLetterToIndex`, `deriveTitleFromFilename` (22 tests) |
 | `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (17 tests) |
 | `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (16 tests) |
+| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409 (10 tests) |
+| `src/app/api/mocks/[id]/attempts/__tests__/attempts.test.ts` | DELETE bulk-reset — auth, ownership, count (4 tests) |
+| `src/app/api/attempts/__tests__/attempt.test.ts` | DELETE attempt — teacher + student auth paths, allowReattempt gate (8 tests) |
 
 ## Vercel Deployment
 
@@ -185,11 +214,11 @@ Direct Postgres (port 5432) is unreachable from Vercel. Supabase pooler (both se
 - Prisma console: console.prisma.io → MHT_CET project → MHT_CET environment (NOT "Development" — that is an empty Prisma-hosted DB)
 - **postinstall must be `prisma generate --no-engine`** for Accelerate on Vercel serverless
 
-### Known Issue (as of last session)
-Infinite redirect loop at `/` and `/login` — not yet resolved. Likely cause: Prisma Accelerate query failing in `getUser()` causing null return, then middleware loop between `/` and `/login`. Next steps:
-1. Update `postinstall` to `prisma generate --no-engine`
+### Known Issue
+Infinite redirect loop at `/` and `/login` was observed in an earlier session. Status on Vercel is unconfirmed — subsequent feature deploys have succeeded but the login flow has not been re-verified. If the loop reappears:
+1. Confirm `postinstall` in `package.json` is `prisma generate --no-engine` (required for Accelerate serverless)
 2. Check Supabase auth redirect URLs include `https://mhtcetmock.vercel.app`
-3. Check Vercel runtime logs for actual error in the redirect path
+3. Check Vercel runtime logs — most likely cause is Prisma Accelerate query failing silently in `getUser()`, returning null, triggering the redirect chain
 
 ### MCP (local dev only)
 - `.mcp.json` in project root — **gitignored**, contains Supabase PAT. Never commit this file.
