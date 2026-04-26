@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatDuration } from '@/lib/utils'
 import PublishToggle from './PublishToggle'
 import ImportMockButton from '@/components/teacher/ImportMockButton'
+import DeleteMockButton from '@/components/teacher/DeleteMockButton'
 
 export default async function TeacherMocksPage() {
   const teacher = await requireRole('TEACHER')
@@ -59,6 +60,7 @@ export default async function TeacherMocksPage() {
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/teacher/mocks/${mock.id}/edit`}>Edit</Link>
                 </Button>
+                <DeleteMockButton mockId={mock.id} mockTitle={mock.title} />
               </div>
             </div>
           ))}
