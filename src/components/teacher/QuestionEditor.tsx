@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -31,33 +31,59 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+export interface ExistingQuestion {
+  id: string
+  text: string
+  chapterId: string
+  imageUrl?: string | null
+  marks: number
+  negMarks: number
+  options: { id: string; text: string; imageUrl?: string | null; isCorrect: boolean }[]
+}
+
 interface Props {
   mockId: string
   chapters: { id: string; name: string; subject: { name: string } }[]
   onCancel?: () => void
+  onSaved?: () => void
+  question?: ExistingQuestion
 }
 
-export default function QuestionEditor({ mockId, chapters, onCancel }: Props) {
+export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, question }: Props) {
+  const editMode = !!question
+  const existingCorrectIdx = question
+    ? Math.max(0, question.options.findIndex((o) => o.isCorrect))
+    : 0
+
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const [questionPreview, setQuestionPreview] = useState('')
-  const [optionPreviews, setOptionPreviews] = useState(['', '', '', ''])
-  const [questionImageUrl, setQuestionImageUrl] = useState('')
-  const [optionImageUrls, setOptionImageUrls] = useState(['', '', '', ''])
-  const [correctIndex, setCorrectIndex] = useState(0)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [questionPreview, setQuestionPreview] = useState(question?.text ?? '')
+  const [optionPreviews, setOptionPreviews] = useState(
+    question ? question.options.map((o) => o.text) : ['', '', '', '']
+  )
+  const [questionImageUrl, setQuestionImageUrl] = useState(question?.imageUrl ?? '')
+  const [optionImageUrls, setOptionImageUrls] = useState(
+    question ? question.options.map((o) => o.imageUrl ?? '') : ['', '', '', '']
+  )
+  const [correctIndex, setCorrectIndex] = useState(existingCorrectIdx)
 
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
+  const emptyOptions: FormValues['options'] = [{ text: '' }, { text: '' }, { text: '' }, { text: '' }]
+  const editOptions: FormValues['options'] | undefined = question
+    ? (question.options.map((o) => ({ text: o.text, imageUrl: o.imageUrl ?? '' })) as FormValues['options'])
+    : undefined
+
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      marks: 2,
-      negMarks: 0,
-      correctIndex: 0,
-      options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }],
+      chapterId: question?.chapterId ?? '',
+      text: question?.text ?? '',
+      imageUrl: question?.imageUrl ?? '',
+      marks: question?.marks ?? 2,
+      negMarks: question?.negMarks ?? 0,
+      correctIndex: existingCorrectIdx,
+      options: editOptions ?? emptyOptions,
     },
   })
-
-  const questionText = watch('text')
 
   const handleImageUpload = async (file: File, target: 'question' | number) => {
     try {
@@ -67,7 +93,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel }: Props) {
         setValue('imageUrl', url)
       } else {
         const urls = [...optionImageUrls]
-        urls[target] = url
+        urls[target as number] = url
         setOptionImageUrls(urls)
         setValue(`options.${target as 0|1|2|3}.imageUrl`, url)
       }
@@ -79,30 +105,53 @@ export default function QuestionEditor({ mockId, chapters, onCancel }: Props) {
   const onSubmit = async (values: FormValues) => {
     setLoading(true)
     try {
-      const payload = {
-        mockId,
-        chapterId: values.chapterId,
-        text: values.text,
-        imageUrl: values.imageUrl,
-        marks: values.marks,
-        negMarks: values.negMarks,
-        options: values.options.map((opt, i) => ({
-          text: opt.text,
-          imageUrl: opt.imageUrl,
-          isCorrect: i === values.correctIndex,
-        })),
+      if (editMode && question) {
+        const payload = {
+          chapterId: values.chapterId,
+          text: values.text,
+          imageUrl: values.imageUrl || undefined,
+          marks: values.marks,
+          negMarks: values.negMarks,
+          options: question.options.map((opt, i) => ({
+            id: opt.id,
+            text: values.options[i].text,
+            imageUrl: values.options[i].imageUrl || undefined,
+            isCorrect: i === values.correctIndex,
+          })),
+        }
+        const res = await fetch(`/api/mocks/${mockId}/questions/${question.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Failed to update question')
+        toast.success('Question updated')
+      } else {
+        const payload = {
+          mockId,
+          chapterId: values.chapterId,
+          text: values.text,
+          imageUrl: values.imageUrl,
+          marks: values.marks,
+          negMarks: values.negMarks,
+          options: values.options.map((opt, i) => ({
+            text: opt.text,
+            imageUrl: opt.imageUrl,
+            isCorrect: i === values.correctIndex,
+          })),
+        }
+        const res = await fetch(`/api/mocks/${mockId}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'Failed to save question')
+        toast.success('Question saved')
       }
 
-      const res = await fetch(`/api/mocks/${mockId}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed to save question')
-
-      toast.success('Question saved')
+      onSaved?.()
       router.refresh()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Something went wrong')
@@ -113,7 +162,6 @@ export default function QuestionEditor({ mockId, chapters, onCancel }: Props) {
 
   const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
-  // Group chapters by subject name
   const subjectMap = chapters.reduce<Record<string, typeof chapters>>((acc, ch) => {
     const s = ch.subject.name
     if (!acc[s]) acc[s] = []
@@ -126,7 +174,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel }: Props) {
       {/* Chapter selector */}
       <div className="space-y-1.5">
         <Label>Chapter</Label>
-        <Select onValueChange={(v) => setValue('chapterId', v)}>
+        <Select defaultValue={question?.chapterId} onValueChange={(v) => setValue('chapterId', v)}>
           <SelectTrigger>
             <SelectValue placeholder="Select chapter" />
           </SelectTrigger>
@@ -241,7 +289,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel }: Props) {
 
       <div className="flex gap-4">
         <Button type="submit" disabled={loading}>
-          {loading ? 'Saving…' : 'Save Question'}
+          {loading ? 'Saving…' : editMode ? 'Update Question' : 'Save Question'}
         </Button>
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel}>

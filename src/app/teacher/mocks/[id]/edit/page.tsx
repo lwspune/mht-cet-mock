@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import MockForm from '@/components/teacher/MockForm'
 import QuestionEditor from '@/components/teacher/QuestionEditor'
+import QuestionEditDialog from '@/components/teacher/QuestionEditDialog'
 import KatexRenderer from '@/components/math/KatexRenderer'
 
 export default async function EditMockPage({ params }: { params: { id: string } }) {
@@ -80,16 +81,39 @@ export default async function EditMockPage({ params }: { params: { id: string } 
                     Q{i + 1}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm line-clamp-2">
+                    <p className="text-sm">
                       <KatexRenderer text={q.text} />
                     </p>
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span className="text-xs text-muted-foreground">{q.chapter.name}</span>
-                      <span className="text-xs text-green-600">
-                        ✓ {q.options.find((o) => o.isCorrect)?.text.slice(0, 40)}
-                      </span>
+                      {(() => {
+                        const correct = q.options.find((o) => o.isCorrect)
+                        return correct ? (
+                          <span className="text-xs text-green-600 flex items-center gap-1">
+                            ✓ <KatexRenderer text={correct.text} />
+                          </span>
+                        ) : null
+                      })()}
                     </div>
                   </div>
+                  <QuestionEditDialog
+                    mockId={mock.id}
+                    chapters={chapters}
+                    question={{
+                      id: q.id,
+                      text: q.text,
+                      chapterId: q.chapterId,
+                      imageUrl: q.imageUrl,
+                      marks: q.marks,
+                      negMarks: q.negMarks,
+                      options: q.options.map((o) => ({
+                        id: o.id,
+                        text: o.text,
+                        imageUrl: o.imageUrl,
+                        isCorrect: o.isCorrect,
+                      })),
+                    }}
+                  />
                 </div>
               </div>
             ))}
