@@ -77,6 +77,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  await db.mock.delete({ where: { id: params.id } })
+  try {
+    await db.mock.delete({ where: { id: params.id } })
+  } catch {
+    return NextResponse.json({ error: 'Failed to delete mock' }, { status: 500 })
+  }
   return NextResponse.json({ success: true })
 }

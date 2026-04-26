@@ -118,7 +118,7 @@ model MockAttempt {
   score       Float?
   maxScore    Float?
 
-  mock    Mock            @relation(fields: [mockId], references: [id])
+  mock    Mock            @relation(fields: [mockId], references: [id], onDelete: Cascade)
   student User            @relation(fields: [studentId], references: [id])
   answers AttemptAnswer[]
 
