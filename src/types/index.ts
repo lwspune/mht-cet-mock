@@ -107,6 +107,13 @@ export interface ChapterPerformance {
   total: number
 }
 
+export interface WrongAnswerOption {
+  text: string
+  imageUrl?: string | null
+  isCorrect: boolean
+  isSelected: boolean
+}
+
 export interface WrongAnswer {
   questionId: string
   questionText: string
@@ -114,8 +121,8 @@ export interface WrongAnswer {
   chapterName: string
   subtopicName: string | null
   subjectName: string
-  yourOptionText: string
-  correctOptionText: string
+  solution: string | null
+  options: WrongAnswerOption[]
   marks: number
   negMarks: number
 }
