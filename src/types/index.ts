@@ -128,6 +128,27 @@ export interface UnattemptedQuestion {
   mockTitle: string
 }
 
+export type ReviewFilter = 'correct' | 'wrong' | 'unattempted'
+
+export interface ReviewOption {
+  id: string
+  text: string
+  imageUrl?: string | null
+  isAnswer: boolean
+}
+
+export interface ReviewQuestion {
+  questionId: string
+  questionText: string
+  questionImageUrl: string | null
+  selectedOptionId: string | null
+  isCorrect: boolean | null
+  chapterName: string
+  subjectName: string
+  solution: string | null
+  options: ReviewOption[]
+}
+
 // Exam session types (client-side)
 export interface ExamSession {
   attemptId: string
