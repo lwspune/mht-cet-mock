@@ -89,51 +89,47 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Phase 2: All validation passed — run one transaction per mock in parallel.
-  // Pre-generate question IDs so we can batch both creates in two round-trips
-  // instead of 50 individual question.create calls (which times out on Vercel Hobby).
-  const results = await Promise.all(
-    validatedMocks.map(({ title, subjectId, resolved }) =>
-      db.$transaction(async (tx) => {
-        const mock = await tx.mock.create({
-          data: {
-            title,
-            subjectId,
-            createdBy: teacher.id,
-            durationMins,
-            marksCorrect,
-            marksWrong,
-          },
-        })
+  // Phase 2: All validation passed — write one mock at a time.
+  // Sequential $transaction([...]) avoids interactive transaction timeouts on Accelerate.
+  // All IDs are pre-generated so every operation in the batch is independent.
+  const results: ImportResponse['mocks'] = []
 
-        const questionData = resolved.map((q, i) => ({
-          id: randomUUID(),
-          mockId: mock.id,
-          chapterId: q.chapterId,
-          text: q.text,
-          marks: marksCorrect,
-          negMarks: marksWrong,
-          orderIndex: i + 1,
-          solution: q.solution,
+  try {
+    for (const { title, subjectId, resolved } of validatedMocks) {
+      const mockId = randomUUID()
+
+      const questionData = resolved.map((q, i) => ({
+        id: randomUUID(),
+        mockId,
+        chapterId: q.chapterId,
+        text: q.text,
+        marks: marksCorrect,
+        negMarks: marksWrong,
+        orderIndex: i + 1,
+        solution: q.solution,
+      }))
+
+      const optionData = resolved.flatMap((q, i) =>
+        q.options.map((optText, idx) => ({
+          questionId: questionData[i].id,
+          text: optText,
+          isCorrect: idx === q.correctIndex,
         }))
+      )
 
-        await tx.question.createMany({ data: questionData })
+      await db.$transaction([
+        db.mock.create({ data: { id: mockId, title, subjectId, createdBy: teacher.id, durationMins, marksCorrect, marksWrong } }),
+        db.question.createMany({ data: questionData }),
+        db.option.createMany({ data: optionData }),
+      ])
 
-        await tx.option.createMany({
-          data: resolved.flatMap((q, i) =>
-            q.options.map((optText, idx) => ({
-              questionId: questionData[i].id,
-              text: optText,
-              isCorrect: idx === q.correctIndex,
-            }))
-          ),
-        })
+      results.push({ id: mockId, title, questionCount: resolved.length })
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[import] transaction failed:', message)
+    return NextResponse.json({ error: `DB write failed: ${message}` }, { status: 500 })
+  }
 
-        return { id: mock.id, title: mock.title, questionCount: resolved.length }
-      }, { timeout: 30000 })
-    )
-  )
-
-  const response: ImportResponse = { mocks: results }
-  return NextResponse.json(response, { status: 201 })
+  return NextResponse.json({ mocks: results } satisfies ImportResponse, { status: 201 })
 }

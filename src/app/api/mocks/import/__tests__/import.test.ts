@@ -15,31 +15,10 @@ const createdMocks: unknown[] = []
 const createdQuestions: unknown[] = []
 const createdOptions: unknown[] = []
 
-const mockTransaction = vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-  const mockId = `mock-${Math.random().toString(36).slice(2)}`
-  const tx = {
-    mock: {
-      create: vi.fn().mockImplementation(({ data }: { data: unknown }) => {
-        const record = { id: mockId, ...data as object }
-        createdMocks.push(record)
-        return Promise.resolve(record)
-      }),
-    },
-    question: {
-      createMany: vi.fn().mockImplementation(({ data }: { data: unknown[] }) => {
-        createdQuestions.push(...data)
-        return Promise.resolve({ count: data.length })
-      }),
-    },
-    option: {
-      createMany: vi.fn().mockImplementation(({ data }: { data: unknown[] }) => {
-        createdOptions.push(...data)
-        return Promise.resolve({ count: data.length })
-      }),
-    },
-  }
-  return fn(tx)
-})
+// $transaction now receives an array of Prisma operations (not a callback).
+// The individual db.mock.create / createMany calls happen before $transaction is called,
+// so we mock them directly on db and $transaction just resolves the array.
+const mockTransaction = vi.fn().mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops))
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -57,6 +36,24 @@ vi.mock('@/lib/db', () => ({
         { id: 'subj-chemistry', name: 'Chemistry' },
         { id: 'subj-maths', name: 'Maths' },
       ]),
+    },
+    mock: {
+      create: vi.fn().mockImplementation(({ data }: { data: unknown }) => {
+        createdMocks.push(data)
+        return Promise.resolve(data)
+      }),
+    },
+    question: {
+      createMany: vi.fn().mockImplementation(({ data }: { data: unknown[] }) => {
+        createdQuestions.push(...data)
+        return Promise.resolve({ count: data.length })
+      }),
+    },
+    option: {
+      createMany: vi.fn().mockImplementation(({ data }: { data: unknown[] }) => {
+        createdOptions.push(...data)
+        return Promise.resolve({ count: data.length })
+      }),
     },
     $transaction: mockTransaction,
   },
