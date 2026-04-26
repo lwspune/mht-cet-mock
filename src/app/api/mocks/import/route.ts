@@ -8,6 +8,7 @@ import type { ImportResponse } from '@/lib/import-types'
 const questionSchema = z.object({
   tempId: z.string(),
   chapterName: z.string(),
+  subtopicName: z.string().nullable(),
   resolvedSubjectKey: z.string(),
   text: z.string().min(1),
   options: z.array(z.string().min(1)).length(4),
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
         negMarks: marksWrong,
         orderIndex: i + 1,
         solution: q.solution,
+        subtopicName: q.subtopicName,
       }))
 
       const optionData = resolved.flatMap((q, i) =>

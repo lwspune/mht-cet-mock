@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
 
     const subjectKey = String(row[col('Subject')] ?? '').trim()
     const chapterName = String(row[col('Chapter')] ?? '').trim()
+    const subtopicName = String(row[col('Subtopic')] ?? '').trim() || null
     const questionText = row[col('Question')]
     const optA = row[col('OptionA')]
     const optB = row[col('OptionB')]
@@ -123,6 +124,7 @@ export async function POST(request: NextRequest) {
       tempId: `row_${rowNum}`,
       rowNum,
       chapterName,
+      subtopicName,
       resolvedSubjectKey,
       text: convertLatex(questionText as string),
       options: [optA, optB, optC, optD].map((o) => convertLatex(o as string) || '—'),

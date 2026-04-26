@@ -4,6 +4,7 @@ export interface ParsedQuestion {
   tempId: string            // "row_N" — client uses this as React key and for skip decisions
   rowNum: number
   chapterName: string
+  subtopicName: string | null
   resolvedSubjectKey: string // which subject's chapter table the chapterId comes from
   text: string              // LaTeX converted to $...$ / $$...$$
   options: string[]         // [A, B, C, D], LaTeX converted
@@ -36,6 +37,7 @@ export interface ParseResponse {
 export interface ImportQuestion {
   tempId: string
   chapterName: string
+  subtopicName: string | null
   resolvedSubjectKey: string
   text: string
   options: string[]

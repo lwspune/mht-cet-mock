@@ -65,6 +65,7 @@ function makeQuestion(overrides: Partial<ImportRequest['mocks'][0]['questions'][
   return {
     tempId: 'row_2',
     chapterName: 'Electromagnetic Induction',
+    subtopicName: 'Self Inductance',
     resolvedSubjectKey: 'Physics',
     text: 'The self induction $L$ produced by solenoid',
     options: ['$L = N\\phi$', '$L = \\mu_0 N A \\ell$', '$L = \\frac{\\mu_0 N^2 A}{\\ell}$', '$L = \\frac{\\mu_0 N A}{\\ell}$'],
@@ -245,6 +246,18 @@ describe('POST /api/mocks/import', () => {
     await POST(postRequest(makeBody()))
     const q = createdQuestions[0] as Record<string, unknown>
     expect(q.solution).toBe('Self-inductance formula derivation.')
+  })
+
+  it('stores subtopicName on the question', async () => {
+    await POST(postRequest(makeBody()))
+    const q = createdQuestions[0] as Record<string, unknown>
+    expect(q.subtopicName).toBe('Self Inductance')
+  })
+
+  it('stores null subtopicName when omitted', async () => {
+    await POST(postRequest(makeBody({ mocks: [{ title: 'Test — Physics', subjectKey: 'Physics', questions: [makeQuestion({ subtopicName: null })] }] })))
+    const q = createdQuestions[0] as Record<string, unknown>
+    expect(q.subtopicName).toBeNull()
   })
 
   it('assigns sequential orderIndex starting at 1', async () => {

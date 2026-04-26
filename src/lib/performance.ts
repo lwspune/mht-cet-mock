@@ -106,6 +106,7 @@ export async function getWrongAnswers(studentId: string): Promise<WrongAnswer[]>
     questionText: a.question.text,
     questionImageUrl: a.question.imageUrl,
     chapterName: a.question.chapter.name,
+    subtopicName: a.question.subtopicName,
     subjectName: a.question.chapter.subject.name,
     yourOptionText: a.selectedOption?.text ?? '',
     correctOptionText: a.question.options.find((o) => o.isCorrect)?.text ?? '',

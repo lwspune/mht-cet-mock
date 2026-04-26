@@ -89,7 +89,8 @@ model Question {
   chapter Chapter         @relation(fields: [chapterId], references: [id])
   options Option[]
   answers AttemptAnswer[]
-  solution String?
+  solution     String?
+  subtopicName String?
 
   @@map("questions")
 }

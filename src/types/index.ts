@@ -112,6 +112,7 @@ export interface WrongAnswer {
   questionText: string
   questionImageUrl?: string | null
   chapterName: string
+  subtopicName: string | null
   subjectName: string
   yourOptionText: string
   correctOptionText: string

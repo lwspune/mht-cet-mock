@@ -227,6 +227,18 @@ describe('POST /api/mocks/import/parse', () => {
     expect(physics.questions[0].solution).toBeTruthy()
   })
 
+  it('populates subtopicName from the Subtopic column', async () => {
+    const res = await POST(makeRequest(makeXlsxFile()))
+    const body = (await res.json()) as ParseResponse
+    const physics = body.subjects.find((s) => s.subjectKey === 'Physics')!
+    // subtopicName must be a non-empty string (or null) — never an empty string
+    for (const q of physics.questions) {
+      expect(q.subtopicName === null || (typeof q.subtopicName === 'string' && q.subtopicName.length > 0)).toBe(true)
+    }
+    // Q1 Physics should have a subtopic
+    expect(physics.questions[0].subtopicName).toBeTruthy()
+  })
+
   it('emits a chapter_cross_resolved warning for Chemistry row with Magnetic Materials chapter', async () => {
     const res = await POST(makeRequest(makeXlsxFile()))
     const body = (await res.json()) as ParseResponse
