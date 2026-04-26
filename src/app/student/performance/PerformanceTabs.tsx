@@ -14,11 +14,12 @@ interface Props {
   chapterData: ChapterPerformance[]
   wrongData: WrongAnswer[]
   unattemptedData: UnattemptedQuestion[]
+  showResetButtons?: boolean
 }
 
 const SUBJECTS = ['All', 'Physics', 'Chemistry', 'Maths']
 
-export default function PerformanceTabs({ examData, chapterData, wrongData, unattemptedData }: Props) {
+export default function PerformanceTabs({ examData, chapterData, wrongData, unattemptedData, showResetButtons }: Props) {
   const [subjectFilter, setSubjectFilter] = useState('All')
 
   return (
@@ -44,6 +45,7 @@ export default function PerformanceTabs({ examData, chapterData, wrongData, unat
       <TabsContent value="exam">
         <ExamWiseTable
           data={subjectFilter === 'All' ? examData : examData.filter((d) => d.subjectName === subjectFilter)}
+          showResetButtons={showResetButtons}
         />
       </TabsContent>
 

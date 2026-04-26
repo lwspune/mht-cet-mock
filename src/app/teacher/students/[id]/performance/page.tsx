@@ -45,6 +45,7 @@ export default async function StudentPerformancePage({ params }: { params: { id:
         chapterData={chapterPerf}
         wrongData={wrongAnswers}
         unattemptedData={unattempted}
+        showResetButtons
       />
     </div>
   )

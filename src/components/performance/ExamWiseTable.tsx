@@ -3,13 +3,15 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import ResetAttemptButton from '@/components/teacher/ResetAttemptButton'
 import type { ExamPerformance } from '@/types'
 
 interface Props {
   data: ExamPerformance[]
+  showResetButtons?: boolean
 }
 
-export default function ExamWiseTable({ data }: Props) {
+export default function ExamWiseTable({ data, showResetButtons }: Props) {
   if (data.length === 0) {
     return <p className="text-center py-10 text-muted-foreground">No exams attempted yet.</p>
   }
@@ -26,6 +28,7 @@ export default function ExamWiseTable({ data }: Props) {
           <TableHead className="text-right">Correct</TableHead>
           <TableHead className="text-right">Wrong</TableHead>
           <TableHead className="text-right">Unattempted</TableHead>
+          {showResetButtons && <TableHead />}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -54,6 +57,11 @@ export default function ExamWiseTable({ data }: Props) {
             <TableCell className="text-right text-green-600 font-medium">{row.correct}</TableCell>
             <TableCell className="text-right text-red-600 font-medium">{row.wrong}</TableCell>
             <TableCell className="text-right text-muted-foreground">{row.unattempted}</TableCell>
+            {showResetButtons && (
+              <TableCell>
+                <ResetAttemptButton attemptId={row.attemptId} />
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import MockForm from '@/components/teacher/MockForm'
 import QuestionEditor from '@/components/teacher/QuestionEditor'
 import QuestionEditDialog from '@/components/teacher/QuestionEditDialog'
+import ResetAttemptsButton from '@/components/teacher/ResetAttemptsButton'
 import KatexRenderer from '@/components/math/KatexRenderer'
 
 export default async function EditMockPage({ params }: { params: { id: string } }) {
@@ -21,6 +22,7 @@ export default async function EditMockPage({ params }: { params: { id: string } 
         include: { options: true, chapter: { include: { subject: true } } },
         orderBy: { orderIndex: 'asc' },
       },
+      _count: { select: { attempts: true } },
     },
   })
 
@@ -53,7 +55,12 @@ export default async function EditMockPage({ params }: { params: { id: string } 
 
       {/* Mock settings */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Mock Settings</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <CardTitle className="text-base">Mock Settings</CardTitle>
+            <ResetAttemptsButton mockId={mock.id} attemptCount={mock._count.attempts} />
+          </div>
+        </CardHeader>
         <CardContent>
           <MockForm
             subjects={subjects}
@@ -64,6 +71,7 @@ export default async function EditMockPage({ params }: { params: { id: string } 
               durationMins: mock.durationMins,
               marksCorrect: mock.marksCorrect,
               marksWrong: mock.marksWrong,
+              allowReattempt: mock.allowReattempt,
             }}
           />
         </CardContent>

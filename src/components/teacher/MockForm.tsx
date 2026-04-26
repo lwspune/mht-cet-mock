@@ -17,6 +17,7 @@ const schema = z.object({
   durationMins: z.coerce.number().min(10).max(360),
   marksCorrect: z.coerce.number().min(0),
   marksWrong: z.coerce.number().min(0),
+  allowReattempt: z.boolean().default(false),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -37,6 +38,7 @@ export default function MockForm({ subjects, defaultValues, mockId }: Props) {
       durationMins: 180,
       marksCorrect: 2,
       marksWrong: 0,
+      allowReattempt: false,
       ...defaultValues,
     },
   })
@@ -105,6 +107,18 @@ export default function MockForm({ subjects, defaultValues, mockId }: Props) {
           <Label htmlFor="marksWrong">Negative marks</Label>
           <Input id="marksWrong" type="number" step="0.25" {...register('marksWrong')} />
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-1">
+        <input
+          type="checkbox"
+          id="allowReattempt"
+          {...register('allowReattempt')}
+          className="h-4 w-4 rounded accent-primary"
+        />
+        <Label htmlFor="allowReattempt" className="font-normal cursor-pointer">
+          Allow students to reattempt this mock
+        </Label>
       </div>
 
       <Button type="submit" disabled={loading}>
