@@ -33,7 +33,7 @@ export default function AttemptPage() {
   const [initialSecs, setInitialSecs] = useState(0)
 
   const attemptIdRef = useRef<string>('')
-  const saveQueueRef = useRef<Set<string>>(new Set())
+  const pendingSavesRef = useRef<Map<string, { selectedOptionId: string | null; isFlagged: boolean }>>(new Map())
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load exam data
@@ -106,53 +106,44 @@ export default function AttemptPage() {
     init()
   }, [mockId, router])
 
-  // Debounced save to server
-  const scheduleSave = useCallback((questionId: string) => {
-    saveQueueRef.current.add(questionId)
+  // Debounced save to server — values passed directly to avoid stale closure
+  const scheduleSave = useCallback((questionId: string, selectedOptionId: string | null, isFlagged: boolean) => {
+    pendingSavesRef.current.set(questionId, { selectedOptionId, isFlagged })
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
-      const ids = Array.from(saveQueueRef.current)
-      saveQueueRef.current.clear()
-      for (const qid of ids) {
+      const entries = Array.from(pendingSavesRef.current.entries())
+      pendingSavesRef.current.clear()
+      for (const [qid, data] of entries) {
         await fetch(`/api/attempts/${attemptIdRef.current}/answers`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            questionId: qid,
-            selectedOptionId: answers[qid] ?? null,
-            isFlagged: flags[qid] ?? false,
-          }),
-        }).catch(() => {}) // silent fail — will retry on next change
+          body: JSON.stringify({ questionId: qid, ...data }),
+        }).catch(() => {})
       }
     }, 600)
-  }, [answers, flags])
+  }, [])
 
   const handleSelectOption = useCallback((optionId: string) => {
     if (!data) return
     const qid = data.questions[currentIdx].id
-    setAnswers((prev) => {
-      const next = { ...prev, [qid]: optionId }
-      return next
-    })
-    scheduleSave(qid)
-  }, [data, currentIdx, scheduleSave])
+    setAnswers((prev) => ({ ...prev, [qid]: optionId }))
+    scheduleSave(qid, optionId, flags[qid] ?? false)
+  }, [data, currentIdx, scheduleSave, flags])
 
   const handleClearResponse = useCallback(() => {
     if (!data) return
     const qid = data.questions[currentIdx].id
     setAnswers((prev) => ({ ...prev, [qid]: null }))
-    scheduleSave(qid)
-  }, [data, currentIdx, scheduleSave])
+    scheduleSave(qid, null, flags[qid] ?? false)
+  }, [data, currentIdx, scheduleSave, flags])
 
   const handleToggleFlag = useCallback(() => {
     if (!data) return
     const qid = data.questions[currentIdx].id
-    setFlags((prev) => {
-      const next = { ...prev, [qid]: !prev[qid] }
-      return next
-    })
-    scheduleSave(qid)
-  }, [data, currentIdx, scheduleSave])
+    const newFlag = !flags[qid]
+    setFlags((prev) => ({ ...prev, [qid]: newFlag }))
+    scheduleSave(qid, answers[qid] ?? null, newFlag)
+  }, [data, currentIdx, scheduleSave, flags, answers])
 
   const navigateTo = useCallback((idx: number) => {
     if (!data) return
@@ -165,18 +156,14 @@ export default function AttemptPage() {
     try {
       // Flush any pending saves first
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      const pendingIds = Array.from(saveQueueRef.current)
-      saveQueueRef.current.clear()
+      const pendingEntries = Array.from(pendingSavesRef.current.entries())
+      pendingSavesRef.current.clear()
       await Promise.all(
-        pendingIds.map((qid) =>
+        pendingEntries.map(([qid, data]) =>
           fetch(`/api/attempts/${attemptIdRef.current}/answers`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              questionId: qid,
-              selectedOptionId: answers[qid] ?? null,
-              isFlagged: flags[qid] ?? false,
-            }),
+            body: JSON.stringify({ questionId: qid, ...data }),
           })
         )
       )
