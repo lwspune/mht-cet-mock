@@ -120,6 +120,64 @@ export async function getWrongAnswers(studentId: string): Promise<WrongAnswer[]>
   }))
 }
 
+export async function getDashboardInsights(studentId: string): Promise<{
+  subjectAccuracy: { subjectName: string; pct: number; total: number }[]
+  weakChapters: { chapterName: string; subjectName: string; pct: number; total: number }[]
+}> {
+  const answers = await db.attemptAnswer.findMany({
+    where: { attempt: { studentId, status: 'SUBMITTED' } },
+    include: {
+      question: {
+        include: { chapter: { include: { subject: true } } },
+      },
+    },
+  })
+
+  if (answers.length === 0) return { subjectAccuracy: [], weakChapters: [] }
+
+  const chapterMap = new Map<string, { chapterName: string; subjectName: string; correct: number; total: number }>()
+  const subjectMap = new Map<string, { subjectName: string; correct: number; total: number }>()
+
+  for (const a of answers) {
+    const chapter = a.question.chapter
+    const subject = chapter.subject
+
+    if (!chapterMap.has(chapter.id)) {
+      chapterMap.set(chapter.id, { chapterName: chapter.name, subjectName: subject.name, correct: 0, total: 0 })
+    }
+    const ch = chapterMap.get(chapter.id)!
+    ch.total++
+    if (a.isCorrect === true) ch.correct++
+
+    if (!subjectMap.has(subject.id)) {
+      subjectMap.set(subject.id, { subjectName: subject.name, correct: 0, total: 0 })
+    }
+    const sub = subjectMap.get(subject.id)!
+    sub.total++
+    if (a.isCorrect === true) sub.correct++
+  }
+
+  const subjectAccuracy = Array.from(subjectMap.values())
+    .map(({ subjectName, correct, total }) => ({
+      subjectName,
+      pct: total > 0 ? Math.round((correct / total) * 100) : 0,
+      total,
+    }))
+    .sort((a, b) => a.pct - b.pct)
+
+  const weakChapters = Array.from(chapterMap.values())
+    .map(({ chapterName, subjectName, correct, total }) => ({
+      chapterName,
+      subjectName,
+      pct: total > 0 ? Math.round((correct / total) * 100) : 0,
+      total,
+    }))
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, 3)
+
+  return { subjectAccuracy, weakChapters }
+}
+
 export async function getUnattemptedQuestions(studentId: string): Promise<UnattemptedQuestion[]> {
   const answers = await db.attemptAnswer.findMany({
     where: {
