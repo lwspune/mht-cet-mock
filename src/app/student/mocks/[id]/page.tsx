@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { requireRole } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDuration } from '@/lib/utils'
 import ReattemptButton from '@/components/student/ReattemptButton'
@@ -16,10 +16,6 @@ export default async function MockDetailPage({ params }: { params: { id: string 
     include: {
       subject: true,
       _count: { select: { questions: true } },
-      questions: {
-        include: { chapter: true },
-        orderBy: { orderIndex: 'asc' },
-      },
     },
   })
 
@@ -32,14 +28,6 @@ export default async function MockDetailPage({ params }: { params: { id: string 
 
   const isSubmitted = attempt?.status === 'SUBMITTED'
   const isInProgress = attempt?.status === 'IN_PROGRESS'
-
-  // Chapter breakdown
-  const chapterMap = new Map<string, { name: string; count: number }>()
-  for (const q of mock.questions) {
-    const key = q.chapterId
-    if (!chapterMap.has(key)) chapterMap.set(key, { name: q.chapter.name, count: 0 })
-    chapterMap.get(key)!.count++
-  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -63,21 +51,6 @@ export default async function MockDetailPage({ params }: { params: { id: string 
           </Card>
         ))}
       </div>
-
-      {/* Chapter breakdown */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Chapter Distribution</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-1.5">
-            {Array.from(chapterMap.values()).map((ch) => (
-              <div key={ch.name} className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{ch.name}</span>
-                <span className="font-medium">{ch.count} Q</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {isSubmitted && attempt && (
         <div className="rounded-lg border bg-green-50 p-4 text-sm text-green-800">
