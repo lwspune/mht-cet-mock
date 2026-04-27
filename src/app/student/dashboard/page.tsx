@@ -49,18 +49,18 @@ export default async function StudentDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 grid-cols-3">
+      <div className="grid gap-3 grid-cols-3">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Available Mocks</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-bold">{totalMocks}</div></CardContent>
+          <CardHeader className="p-3 pb-1 sm:p-6 sm:pb-2"><CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Available Mocks</CardTitle></CardHeader>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0"><div className="text-2xl sm:text-3xl font-bold">{totalMocks}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Completed</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-bold text-green-600">{submitted}</div></CardContent>
+          <CardHeader className="p-3 pb-1 sm:p-6 sm:pb-2"><CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Completed</CardTitle></CardHeader>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0"><div className="text-2xl sm:text-3xl font-bold text-green-600">{submitted}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-bold text-yellow-600">{inProgress}</div></CardContent>
+          <CardHeader className="p-3 pb-1 sm:p-6 sm:pb-2"><CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">In Progress</CardTitle></CardHeader>
+          <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0"><div className="text-2xl sm:text-3xl font-bold text-yellow-600">{inProgress}</div></CardContent>
         </Card>
       </div>
 

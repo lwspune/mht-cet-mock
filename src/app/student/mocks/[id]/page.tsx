@@ -36,7 +36,7 @@ export default async function MockDetailPage({ params }: { params: { id: string 
         <h1 className="text-2xl font-bold">{mock.title}</h1>
       </div>
 
-      <div className="grid grid-cols-4 gap-3 text-center">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
         {[
           { label: 'Questions', value: mock._count.questions },
           { label: 'Duration', value: formatDuration(mock.durationMins) },

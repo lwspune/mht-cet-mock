@@ -38,7 +38,7 @@ export default function ChapterWiseChart({ data, subjectFilter }: Props) {
 
   const chartData = filtered
     .map((d) => ({
-      name: d.chapterName.length > 22 ? d.chapterName.slice(0, 22) + '…' : d.chapterName,
+      name: d.chapterName.length > 18 ? d.chapterName.slice(0, 18) + '…' : d.chapterName,
       fullName: d.chapterName,
       pctCorrect: pct(d.correct, d.total),
     }))
@@ -76,7 +76,7 @@ export default function ChapterWiseChart({ data, subjectFilter }: Props) {
           <YAxis
             type="category"
             dataKey="name"
-            width={160}
+            width={130}
             tick={{ fontSize: 11 }}
           />
           <Tooltip
