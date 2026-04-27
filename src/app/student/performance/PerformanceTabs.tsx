@@ -24,7 +24,7 @@ export default function PerformanceTabs({ examData, chapterData, wrongData, unat
 
   return (
     <Tabs defaultValue="exam">
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
         <TabsList>
           <TabsTrigger value="exam">Exam-wise</TabsTrigger>
           <TabsTrigger value="chapter">Chapter-wise</TabsTrigger>
@@ -33,7 +33,7 @@ export default function PerformanceTabs({ examData, chapterData, wrongData, unat
         </TabsList>
 
         <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-          <SelectTrigger className="w-36 h-9">
+          <SelectTrigger className="w-full sm:w-36 h-9">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

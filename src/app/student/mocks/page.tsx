@@ -66,10 +66,8 @@ export default async function MocksPage() {
                   <Card key={mock.id} className="flex flex-col">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base">{mock.title}</CardTitle>
-                      <CardDescription className="flex items-center gap-3 text-xs">
-                        <span>{mock._count.questions} questions</span>
-                        <span>{formatDuration(mock.durationMins)}</span>
-                        <span>+{mock.marksCorrect} / -{mock.marksWrong}</span>
+                      <CardDescription className="text-xs">
+                        {mock._count.questions} questions · {formatDuration(mock.durationMins)} · +{mock.marksCorrect} / −{mock.marksWrong}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1">
