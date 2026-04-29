@@ -319,6 +319,7 @@ export default function ChapterWiseChart({ data, subjectFilter, wrongData, unatt
             dataKey="pctCorrect"
             radius={[0, 4, 4, 0]}
             maxBarSize={28}
+            minPointSize={4}
             cursor="pointer"
             onClick={(data) => setSelected(data.original)}
             label={{ position: 'right', formatter: (v: number) => `${v.toFixed(0)}%`, fontSize: 11 }}
