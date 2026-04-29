@@ -55,7 +55,7 @@ Two roles: **Teacher** (creates mocks, manages students) and **Student** (attemp
 /teacher/mocks/new       → create mock
 /teacher/mocks/[id]/edit → edit mock + manage questions + Reset All Attempts
 
-/student/dashboard       → student home
+/student/dashboard       → student home (subject accuracy bars + weak chapters + recent attempts)
 /student/mocks           → browse published mocks (Reattempt CTA if allowed)
 /student/mocks/[id]      → mock detail + Reattempt button if allowed
 /student/mocks/[id]/attempt → exam UI (timer, navigator, auto-save)
@@ -68,6 +68,7 @@ Two roles: **Teacher** (creates mocks, manages students) and **Student** (attemp
 /api/mocks/[id]/questions/[questionId] → PATCH, DELETE
 /api/attempts            → POST: start or resume attempt
 /api/attempts/[id]       → DELETE: teacher (any attempt on own mock) or student (own, if allowReattempt)
+/api/attempts/[id]/questions → GET: returns questions for an attempt filtered by ?filter=correct|wrong|unattempted
 /api/attempts/[id]/answers → GET, PATCH (auto-save)
 /api/attempts/[id]/submit  → POST: score + mark SUBMITTED
 /api/mocks/import/parse  → POST: upload .xlsx → returns preview JSON (ParseResponse)
@@ -149,7 +150,7 @@ npx vitest run       # run once (no watch mode)
 |---|---|
 | `src/lib/auth.ts` | Auth helpers (see Auth Pattern above) |
 | `src/lib/db.ts` | Prisma client singleton |
-| `src/lib/performance.ts` | 4 query functions for performance tabs |
+| `src/lib/performance.ts` | 5 query functions: 4 for performance tabs + `getDashboardInsights` (subject accuracy + weak chapters) |
 | `src/lib/supabase/server.ts` | `createClient()` + `createAdminClient()` |
 | `src/middleware.ts` | Session refresh on every request |
 | `src/components/math/KatexRenderer.tsx` | KaTeX renderer |
@@ -192,29 +193,34 @@ Required headers (exact): `Q`, `Subject`, `Course`, `Chapter`, `Subtopic`, `Ques
 ## Tests
 Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Prisma client requires a live DB URL which isn't available in test environment.
 
-**93 tests, 7 suites** — `npx vitest run`
+**99 tests, 8 suites** — `npx vitest run`
 
 | File | Coverage |
 |---|---|
 | `src/lib/__tests__/import-utils.test.ts` | `convertLatex`, `answerLetterToIndex`, `deriveTitleFromFilename` (22 tests) |
+| `src/lib/__tests__/performance.test.ts` | `getDashboardInsights` — subject accuracy, weak chapters, sort order (6 tests) |
 | `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (18 tests, incl. subtopicName) |
 | `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (18 tests, incl. subtopicName + solution) |
 | `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution field (12 tests) |
 | `src/app/api/mocks/[id]/attempts/__tests__/attempts.test.ts` | DELETE bulk-reset — auth, ownership, count (4 tests) |
 | `src/app/api/attempts/__tests__/attempt.test.ts` | DELETE attempt — teacher + student auth paths, allowReattempt gate (8 tests) |
+| `src/app/api/attempts/[id]/questions/__tests__/questions.test.ts` | GET questions with filter — auth, filter values (9 tests) |
 
 ## Student Performance Dashboard
 `/student/performance` — 4-tab server component, data fetched in parallel via `Promise.all`.
 
 | Tab | Component | Data source |
 |---|---|---|
-| Exam-wise | `ExamWiseChart` (Recharts) | `getExamPerformance()` |
+| Exam-wise | `ExamWiseTable` | `getExamPerformance()` |
 | Chapter-wise | `ChapterWiseChart` (Recharts) | `getChapterPerformance()` |
 | Wrong Answers | `WrongAudit` | `getWrongAnswers()` |
 | Unattempted | `UnattemptedAudit` | `getUnattemptedQuestions()` |
 
+### Exam-wise Table
+Per-attempt rows with score, accuracy, and a Review dropdown (Correct / Wrong / Unattempted). Selecting a filter fetches `/api/attempts/[id]/questions?filter=...` and expands question cards inline. Mobile: card layout (`md:hidden`); desktop: full table (`hidden md:block`).
+
 ### Chapter-wise Chart
-Single `% correct` bar per chapter, sorted ascending (weakest first). Color-coded: red < 40% (weak), amber 40–70% (moderate), green ≥ 70% (strong). Inline value labels. Subject filter via `PerformanceTabs`.
+Single `% correct` bar per chapter, sorted ascending (weakest first). Color-coded: red < 40% (weak), amber 40–70% (moderate), green ≥ 70% (strong). Inline value labels. Subject filter via `PerformanceTabs`. Y-axis `width={130}`, names truncated at 18 chars.
 
 ### Wrong Answers + Unattempted (same UX pattern)
 Two-view drill-down:
