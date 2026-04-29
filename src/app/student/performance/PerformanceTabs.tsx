@@ -53,6 +53,8 @@ export default function PerformanceTabs({ examData, chapterData, wrongData, unat
         <ChapterWiseChart
           data={chapterData}
           subjectFilter={subjectFilter === 'All' ? undefined : subjectFilter}
+          wrongData={wrongData}
+          unattemptedData={unattemptedData}
         />
       </TabsContent>
 
