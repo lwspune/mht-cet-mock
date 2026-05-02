@@ -71,6 +71,7 @@ function makeQuestion(overrides: Partial<ImportRequest['mocks'][0]['questions'][
     options: ['$L = N\\phi$', '$L = \\mu_0 N A \\ell$', '$L = \\frac{\\mu_0 N^2 A}{\\ell}$', '$L = \\frac{\\mu_0 N A}{\\ell}$'],
     correctIndex: 2,
     solution: 'Self-inductance formula derivation.',
+    pyqYear: '2021',
     ...overrides,
   }
 }
@@ -258,6 +259,18 @@ describe('POST /api/mocks/import', () => {
     await POST(postRequest(makeBody({ mocks: [{ title: 'Test — Physics', subjectKey: 'Physics', questions: [makeQuestion({ subtopicName: null })] }] })))
     const q = createdQuestions[0] as Record<string, unknown>
     expect(q.subtopicName).toBeNull()
+  })
+
+  it('stores pyqYear on the question', async () => {
+    await POST(postRequest(makeBody()))
+    const q = createdQuestions[0] as Record<string, unknown>
+    expect(q.pyqYear).toBe('2021')
+  })
+
+  it('stores null pyqYear when omitted', async () => {
+    await POST(postRequest(makeBody({ mocks: [{ title: 'Test — Physics', subjectKey: 'Physics', questions: [makeQuestion({ pyqYear: null })] }] })))
+    const q = createdQuestions[0] as Record<string, unknown>
+    expect(q.pyqYear).toBeNull()
   })
 
   it('assigns sequential orderIndex starting at 1', async () => {

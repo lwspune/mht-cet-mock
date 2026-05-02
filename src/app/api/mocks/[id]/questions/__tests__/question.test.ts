@@ -146,6 +146,24 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
       })
     )
   })
+
+  it('passes pyqYear to db.question.update when provided', async () => {
+    await PATCH(patchRequest(makePayload({ pyqYear: '2021' })), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ pyqYear: '2021' }),
+      })
+    )
+  })
+
+  it('sets pyqYear to null when omitted', async () => {
+    await PATCH(patchRequest(makePayload()), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ pyqYear: null }),
+      })
+    )
+  })
 })
 
 describe('DELETE /api/mocks/[id]/questions/[questionId]', () => {

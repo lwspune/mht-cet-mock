@@ -286,4 +286,36 @@ describe('POST /api/mocks/import/parse', () => {
     const body = (await res.json()) as ParseResponse
     expect(body.subjects.map((s) => s.subjectKey)).toEqual(['Physics', 'Chemistry', 'Maths'])
   })
+
+  it('sets pyqYear to null when PYQ column is absent (legacy xlsx)', async () => {
+    const res = await POST(makeRequest(makeXlsxFile()))
+    const body = (await res.json()) as ParseResponse
+    for (const subject of body.subjects) {
+      for (const q of subject.questions) {
+        expect(q.pyqYear).toBeNull()
+      }
+    }
+  })
+
+  it('reads pyqYear from PYQ column when present', async () => {
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Q', 'Subject', 'Course', 'Chapter', 'Subtopic', 'Question Context',
+        'Question', 'OptionA', 'OptionB', 'OptionC', 'OptionD', 'Answer', 'Solution', 'Difficulty Level', 'PYQ'],
+      [1, 'Physics', 'MHT-CET', 'Gravitation', 'Escape Velocity', null, 'What is $g$?', 'A', 'B', 'C', 'D', 'A', 'Solution text', 'Easy', '2021'],
+      [2, 'Physics', 'MHT-CET', 'Gravitation', '', null, 'What is $G$?', 'A', 'B', 'C', 'D', 'B', 'Solution text', 'Easy', ''],
+    ])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    const fd = new FormData()
+    fd.append('file', new File([buf], 'test_pyq.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+    const req = new NextRequest('http://localhost/api/mocks/import/parse', { method: 'POST', body: fd })
+    const res = await POST(req)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as ParseResponse
+    const physics = body.subjects.find((s) => s.subjectKey === 'Physics')!
+    expect(physics.questions[0].pyqYear).toBe('2021')  // row with '2021'
+    expect(physics.questions[1].pyqYear).toBeNull()    // row with empty string → null
+  })
 })

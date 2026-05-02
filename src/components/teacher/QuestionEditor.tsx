@@ -24,6 +24,7 @@ const schema = z.object({
   text: z.string().min(1, 'Question text required'),
   imageUrl: z.string().optional(),
   solution: z.string().optional(),
+  pyqYear: z.string().optional(),
   options: z.tuple([optionSchema, optionSchema, optionSchema, optionSchema]),
   correctIndex: z.number().min(0).max(3),
   marks: z.coerce.number().default(2),
@@ -38,6 +39,7 @@ export interface ExistingQuestion {
   chapterId: string
   imageUrl?: string | null
   solution?: string | null
+  pyqYear?: string | null
   marks: number
   negMarks: number
   options: { id: string; text: string; imageUrl?: string | null; isCorrect: boolean }[]
@@ -82,6 +84,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
       text: question?.text ?? '',
       imageUrl: question?.imageUrl ?? '',
       solution: question?.solution ?? '',
+      pyqYear: question?.pyqYear ?? '',
       marks: question?.marks ?? 2,
       negMarks: question?.negMarks ?? 0,
       correctIndex: existingCorrectIdx,
@@ -115,6 +118,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
           text: values.text,
           imageUrl: values.imageUrl || undefined,
           solution: values.solution || undefined,
+          pyqYear: values.pyqYear || null,
           marks: values.marks,
           negMarks: values.negMarks,
           options: question.options.map((opt, i) => ({
@@ -139,6 +143,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
           text: values.text,
           imageUrl: values.imageUrl,
           solution: values.solution || undefined,
+          pyqYear: values.pyqYear || undefined,
           marks: values.marks,
           negMarks: values.negMarks,
           options: values.options.map((opt, i) => ({
@@ -291,6 +296,20 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
             )}
           </div>
         ))}
+      </div>
+
+      {/* PYQ Year */}
+      <div className="space-y-1.5">
+        <Label>
+          PYQ Year{' '}
+          <span className="text-muted-foreground font-normal text-xs">(optional — e.g. 2021)</span>
+        </Label>
+        <input
+          type="text"
+          placeholder="e.g. 2021"
+          className="flex h-9 w-full max-w-[12rem] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          {...register('pyqYear')}
+        />
       </div>
 
       {/* Solution */}

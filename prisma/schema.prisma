@@ -91,6 +91,7 @@ model Question {
   answers AttemptAnswer[]
   solution     String?
   subtopicName String?
+  pyqYear      String?  // e.g. "2021"; null means not a PYQ question
 
   @@map("questions")
 }

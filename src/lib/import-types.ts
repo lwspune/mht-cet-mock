@@ -10,6 +10,7 @@ export interface ParsedQuestion {
   options: string[]         // [A, B, C, D], LaTeX converted
   correctIndex: number      // 0–3
   solution: string | null
+  pyqYear: string | null    // e.g. "2021"; null if not a PYQ or column absent
 }
 
 export interface ImportWarning {
@@ -43,6 +44,7 @@ export interface ImportQuestion {
   options: string[]
   correctIndex: number
   solution: string | null
+  pyqYear: string | null
 }
 
 export interface ImportMockPayload {

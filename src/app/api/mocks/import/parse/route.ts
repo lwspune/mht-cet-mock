@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
     const optD = row[col('OptionD')]
     const answerLetter = String(row[col('Answer')] ?? '').trim()
     const solution = row[col('Solution')]
+    const pyqYear = headers.includes('PYQ') ? String(row[col('PYQ')] ?? '').trim() || null : null
 
     if (!subjectKey || !questionText) continue
 
@@ -130,6 +131,7 @@ export async function POST(request: NextRequest) {
       options: [optA, optB, optC, optD].map((o) => convertLatex(o as string) || '—'),
       correctIndex,
       solution: solution ? convertLatex(solution as string) : null,
+      pyqYear,
     })
   }
 

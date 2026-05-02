@@ -14,6 +14,7 @@ const questionSchema = z.object({
   options: z.array(z.string().min(1)).length(4),
   correctIndex: z.number().int().min(0).max(3),
   solution: z.string().nullable(),
+  pyqYear: z.string().nullable(),
 })
 
 const mockPayloadSchema = z.object({
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
         orderIndex: i + 1,
         solution: q.solution,
         subtopicName: q.subtopicName,
+        pyqYear: q.pyqYear,
       }))
 
       const optionData = resolved.flatMap((q, i) =>
