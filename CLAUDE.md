@@ -54,12 +54,13 @@ Two roles: **Teacher** (creates mocks, manages students) and **Student** (attemp
 /teacher/mocks           → mock list (+ Import button)
 /teacher/mocks/new       → create mock
 /teacher/mocks/[id]/edit → edit mock + manage questions + Reset All Attempts
+/teacher/frequency       → MHT CET chapter frequency table editor (pre-populated from PYQ data, editable)
 
 /student/dashboard       → student home (subject accuracy bars + weak chapters + recent attempts)
 /student/mocks           → browse published mocks (Reattempt CTA if allowed)
 /student/mocks/[id]      → mock detail + Reattempt button if allowed
 /student/mocks/[id]/attempt → exam UI (timer, navigator, auto-save)
-/student/performance     → 4-tab performance dashboard
+/student/performance     → 5-tab performance dashboard
 
 /api/mocks               → GET (list), POST (create)
 /api/mocks/[id]          → GET, PATCH (title/duration/marks/isPublished/allowReattempt), DELETE
@@ -73,6 +74,9 @@ Two roles: **Teacher** (creates mocks, manages students) and **Student** (attemp
 /api/attempts/[id]/submit  → POST: score + mark SUBMITTED
 /api/mocks/import/parse  → POST: upload .xlsx → returns preview JSON (ParseResponse)
 /api/mocks/import        → POST: commits previewed mocks to DB (ImportRequest → ImportResponse)
+
+/api/course/[courseSlug]/frequency      → GET: list chapter frequencies grouped by subject; PUT: reset to PYQ defaults
+/api/course/[courseSlug]/frequency/[chapterId] → PATCH: update a single chapter's pct (teacher only)
 ```
 
 ## Auth Pattern — Critical
@@ -95,9 +99,11 @@ Schema in `prisma/schema.prisma`. Key invariants:
 - `AttemptAnswer.selectedOptionId = null` means unattempted (not wrong)
 - Score: `+marksCorrect` (correct), `-marksWrong` (wrong + selected), `0` (null selectedOptionId)
 - Performance data is derived from `attempt_answers` joined with `chapters` — no denormalized counters
+- `Course` / `CourseSubjectConfig` / `ChapterFrequency` — course-aware score predictor. MHT CET course seeded with Physics=50m, Chem=50m, Maths=100m. `ChapterFrequency.pct` is teacher-editable; defaults computed from PYQ question distribution. Future courses: add a `Course` row + `CourseSubjectConfig` rows + re-run seed.
 - `Mock.allowReattempt Boolean @default(false)` — teacher-controlled gate; when true, students may delete their submitted attempt and start fresh via `DELETE /api/attempts/[id]`
 - `Question.solution String?` — optional explanation, supports KaTeX. Populated by xlsx import; editable in QuestionEditor.
 - `Question.subtopicName String?` — nullable; populated from xlsx `Subtopic` column at import time. Manually-added questions have null.
+- `Question.pyqYear String?` — nullable; e.g. `"May'2021"`. Populated from xlsx `PYQ` column (optional column — absent means null). Editable in QuestionEditor. Existing 748 PYQ questions backfilled via SQL on 2026-05-02.
 - Deleting a `Mock` cascades to `Question`, `MockAttempt` → `AttemptAnswer` (full cascade chain). `AttemptAnswer.questionId` is CASCADE (not RESTRICT) — critical for mock deletion to work when attempts exist.
 
 After schema changes: `npx prisma db push` then `npx prisma generate`
@@ -141,7 +147,7 @@ npm run dev          # start dev server
 npm run db:push      # push schema changes to Supabase
 npm run db:seed      # seed subjects + chapters (idempotent upserts)
 npx prisma studio    # browse DB in browser
-npx vitest           # run all tests (93 tests across 7 suites)
+npx vitest           # run all tests (122 tests, 10 suites)
 npx vitest run       # run once (no watch mode)
 ```
 
@@ -150,7 +156,7 @@ npx vitest run       # run once (no watch mode)
 |---|---|
 | `src/lib/auth.ts` | Auth helpers (see Auth Pattern above) |
 | `src/lib/db.ts` | Prisma client singleton |
-| `src/lib/performance.ts` | 5 query functions: 4 for performance tabs + `getDashboardInsights` (subject accuracy + weak chapters) |
+| `src/lib/performance.ts` | 7 query functions: 4 for performance tabs + `getDashboardInsights` + `getProjectedScores` + `getSubjectFrequencies` |
 | `src/lib/supabase/server.ts` | `createClient()` + `createAdminClient()` |
 | `src/middleware.ts` | Session refresh on every request |
 | `src/components/math/KatexRenderer.tsx` | KaTeX renderer |
@@ -171,8 +177,14 @@ npx vitest run       # run once (no watch mode)
 | `src/app/api/mocks/[id]/questions/[questionId]/route.ts` | PATCH + DELETE for individual questions |
 | `src/app/api/mocks/[id]/attempts/route.ts` | DELETE — teacher bulk-reset all attempts for a mock |
 | `src/app/api/attempts/[id]/route.ts` | DELETE — teacher or student (if allowReattempt) deletes one attempt |
+| `src/app/api/course/[courseSlug]/frequency/route.ts` | GET all chapter frequencies; PUT reset to PYQ defaults |
+| `src/app/api/course/[courseSlug]/frequency/[chapterId]/route.ts` | PATCH single chapter pct |
+| `src/app/teacher/frequency/page.tsx` | Teacher frequency table editor page |
+| `src/components/teacher/FrequencyTableEditor.tsx` | Editable pct table per chapter, Save All, Reset to PYQ Defaults |
+| `src/components/performance/ProjectedScoreCard.tsx` | Per-subject predictor card: score, progress bar, milestones, top-6 chapters |
+| `src/components/performance/ScorePredictorTab.tsx` | PCM total + 3 subject cards, subject-filter aware |
 | `prisma/schema.prisma` | Full DB schema |
-| `prisma/seed.ts` | PCM subjects + chapters seed |
+| `prisma/seed.ts` | PCM subjects + chapters + MHT CET course config + chapter frequencies from PYQ data |
 
 ## Import Feature
 Teacher uploads a `.xlsx` file (MHT CET exam format) via the Import button on `/teacher/mocks`. Two-step flow:
@@ -184,30 +196,35 @@ Teacher uploads a `.xlsx` file (MHT CET exam format) via the Import button on `/
 ### xlsx Column Contract
 Required headers (exact): `Q`, `Subject`, `Course`, `Chapter`, `Subtopic`, `Question Context`, `Question`, `OptionA`, `OptionB`, `OptionC`, `OptionD`, `Answer`, `Solution`, `Difficulty Level`
 
+Optional header: `PYQ` — year string (e.g. `"2021"`). When present and non-empty, stored as-is in `Question.pyqYear`. Absent or blank → `null`. Legacy xlsx files without this column import without error.
+
 ### Known Edge Cases
 - Empty option cells (e.g. Q117 Maths/Limits OptionC blank) → replaced with `—` placeholder at parse time
 - Chapter appears under wrong subject in xlsx (e.g. "Magnetic Materials" listed under Chemistry) → cross-resolved to correct subject, warning emitted, teacher can Skip
 - Answer letter must be A/B/C/D (case-insensitive); invalid answer → question skipped with warning
 - Empty `Subtopic` cell → stored as `null` (not empty string); questions group by `chapterName` as fallback in performance UI
+- Empty `PYQ` cell → stored as `null` (not empty string)
 
 ## Tests
 Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Prisma client requires a live DB URL which isn't available in test environment.
 
-**99 tests, 8 suites** — `npx vitest run`
+**122 tests, 10 suites** — `npx vitest run`
 
 | File | Coverage |
 |---|---|
 | `src/lib/__tests__/import-utils.test.ts` | `convertLatex`, `answerLetterToIndex`, `deriveTitleFromFilename` (22 tests) |
 | `src/lib/__tests__/performance.test.ts` | `getDashboardInsights` — subject accuracy, weak chapters, sort order (6 tests) |
-| `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (18 tests, incl. subtopicName) |
-| `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (18 tests, incl. subtopicName + solution) |
-| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution field (12 tests) |
+| `src/lib/__tests__/projected-scores.test.ts` | `getProjectedScores` — accuracy, not-tested, gap sort, milestones (7 tests) |
+| `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (20 tests, incl. subtopicName + pyqYear) |
+| `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (20 tests, incl. subtopicName + solution + pyqYear) |
+| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution + pyqYear fields (14 tests) |
 | `src/app/api/mocks/[id]/attempts/__tests__/attempts.test.ts` | DELETE bulk-reset — auth, ownership, count (4 tests) |
 | `src/app/api/attempts/__tests__/attempt.test.ts` | DELETE attempt — teacher + student auth paths, allowReattempt gate (8 tests) |
 | `src/app/api/attempts/[id]/questions/__tests__/questions.test.ts` | GET questions with filter — auth, filter values (9 tests) |
+| `src/app/api/course/[courseSlug]/frequency/__tests__/frequency.test.ts` | PATCH frequency — auth, validation, 404, upsert (10 tests) |
 
 ## Student Performance Dashboard
-`/student/performance` — 4-tab server component, data fetched in parallel via `Promise.all`.
+`/student/performance` — 5-tab server component, data fetched in parallel via `Promise.all`.
 
 | Tab | Component | Data source |
 |---|---|---|
@@ -215,6 +232,7 @@ Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Pr
 | Chapter-wise | `ChapterWiseChart` (Recharts) | `getChapterPerformance()` |
 | Wrong Answers | `WrongAudit` | `getWrongAnswers()` |
 | Unattempted | `UnattemptedAudit` | `getUnattemptedQuestions()` |
+| Score Predictor | `ScorePredictorTab` → `ProjectedScoreCard` | `getProjectedScores()` |
 
 ### Exam-wise Table
 Per-attempt rows with score, accuracy, and a Review dropdown (Correct / Wrong / Unattempted). Selecting a filter fetches `/api/attempts/[id]/questions?filter=...` and expands question cards inline. Mobile: card layout (`md:hidden`); desktop: full table (`hidden md:block`).
@@ -227,6 +245,33 @@ Two-view drill-down:
 1. **Subtopic list** — groups by `subtopicName` (falls back to `chapterName` if null), sorted worst-first (highest count at top), colored badge.
 2. **Question cards** — click subtopic to drill in. Cards match exam review format: Q{n} badge, chapter pill, status badge, all 4 options (green ✓ correct, red ✗ selected-wrong / gray for unattempted), Show/Hide solution toggle.
 Back button returns to subtopic list. Subject filter resets to list view.
+
+### Score Predictor Tab
+Shows a PCM combined total card + 3 per-subject `ProjectedScoreCard`s. Each card shows:
+- Projected score (large number, color-coded by % of max)
+- Progress bar with milestone markers: Cutoff (30%), Merit (50%), Rank (70%)
+- Top-6 chapters by gap (marksAtStake − projected), sorted largest-gap first
+- Chapters never answered shown as `0.0 / X.X  not tested`
+
+**Algorithm:** `projected = (correct / total) × marksAtStake` per chapter. `marksAtStake = (pct / 100) × subjectMaxMarks`. Subject filter on the tab reduces cards shown (e.g. "Physics" shows only the Physics card).
+
+**Teacher frequency editor** at `/teacher/frequency` — editable pct per chapter per subject, must sum to 100%. "Reset to PYQ Defaults" button recomputes from live PYQ question distribution via `PUT /api/course/mht-cet/frequency`.
+
+## DB Seed Data
+
+Production DB contains 15 imported PYQ mocks (Physics, Chemistry, Maths × 2021–2025), totalling 748 questions. All have `pyqYear` set to `May'YYYY`.
+
+| Year | Physics | Chemistry | Maths |
+|---|---|---|---|
+| 2021 | 50 q | 50 q | 50 q |
+| 2022 | 50 q | 50 q | 48 q |
+| 2023 | 50 q | 50 q | 50 q |
+| 2024 | 50 q | 50 q | 50 q |
+| 2025 | 50 q | 50 q | 50 q |
+
+Mock titles follow the pattern `MHT CET YYYY — Subject`. All mocks are currently unpublished (not visible to students until the teacher publishes them).
+
+The `prisma/seed.ts` script seeds subjects + chapters + MHT CET course config + chapter frequencies (computed from PYQ question distribution). It does not seed mocks or questions — those were imported via the xlsx import feature.
 
 ## Vercel Deployment
 
@@ -242,12 +287,6 @@ Direct Postgres (port 5432) is unreachable from Vercel. Supabase pooler (both se
 - `DIRECT_URL` in Vercel = direct Supabase URL (for local `prisma db push` / `db seed` only)
 - Prisma console: console.prisma.io → MHT_CET project → MHT_CET environment (NOT "Development" — that is an empty Prisma-hosted DB)
 - **postinstall must be `prisma generate --no-engine`** for Accelerate on Vercel serverless
-
-### Known Issue
-Infinite redirect loop at `/` and `/login` was observed in an earlier session. Status on Vercel is unconfirmed — subsequent feature deploys have succeeded but the login flow has not been re-verified. If the loop reappears:
-1. Confirm `postinstall` in `package.json` is `prisma generate --no-engine` (required for Accelerate serverless)
-2. Check Supabase auth redirect URLs include `https://mhtcetmock.vercel.app`
-3. Check Vercel runtime logs — most likely cause is Prisma Accelerate query failing silently in `getUser()`, returning null, triggering the redirect chain
 
 ### MCP (local dev only)
 - `.mcp.json` in project root — **gitignored**, contains Supabase PAT. Never commit this file.
