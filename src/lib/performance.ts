@@ -184,6 +184,8 @@ export async function getDashboardInsights(studentId: string): Promise<{
 export async function getProjectedScores(
   studentId: string,
   courseSlug = 'mht-cet',
+  mode: 'all' | 'recent' = 'all',
+  recentN = 3,
 ): Promise<SubjectProjection[]> {
   const course = await db.course.findUnique({
     where: { slug: courseSlug },
@@ -200,9 +202,29 @@ export async function getProjectedScores(
 
   if (!course) return []
 
-  // Per-chapter accuracy from all submitted attempts for this student
+  let recentIds: string[] | undefined
+  if (mode === 'recent') {
+    const sets = await Promise.all(
+      course.subjectConfigs.map((config) =>
+        db.mockAttempt.findMany({
+          where: { studentId, status: 'SUBMITTED', mock: { subjectId: config.subjectId } },
+          orderBy: { submittedAt: 'desc' },
+          take: recentN,
+          select: { id: true },
+        }),
+      ),
+    )
+    recentIds = sets.flat().map((a) => a.id)
+  }
+
   const answers = await db.attemptAnswer.findMany({
-    where: { attempt: { studentId, status: 'SUBMITTED' } },
+    where: {
+      attempt: {
+        studentId,
+        status: 'SUBMITTED',
+        ...(recentIds !== undefined ? { id: { in: recentIds } } : {}),
+      },
+    },
     select: { isCorrect: true, selectedOptionId: true, question: { select: { chapterId: true } } },
   })
 

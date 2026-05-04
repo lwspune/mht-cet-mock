@@ -16,12 +16,13 @@ interface Props {
   wrongData: WrongAnswer[]
   unattemptedData: UnattemptedQuestion[]
   projectedScores?: SubjectProjection[]
+  recentScores?: SubjectProjection[]
   showResetButtons?: boolean
 }
 
 const SUBJECTS = ['All', 'Physics', 'Chemistry', 'Maths']
 
-export default function PerformanceTabs({ examData, chapterData, wrongData, unattemptedData, projectedScores = [], showResetButtons }: Props) {
+export default function PerformanceTabs({ examData, chapterData, wrongData, unattemptedData, projectedScores = [], recentScores, showResetButtons }: Props) {
   const [subjectFilter, setSubjectFilter] = useState('All')
 
   return (
@@ -72,6 +73,7 @@ export default function PerformanceTabs({ examData, chapterData, wrongData, unat
       <TabsContent value="predictor">
         <ScorePredictorTab
           data={subjectFilter === 'All' ? projectedScores : projectedScores.filter((d) => d.subjectName === subjectFilter)}
+          recentData={recentScores ? (subjectFilter === 'All' ? recentScores : recentScores.filter((d) => d.subjectName === subjectFilter)) : undefined}
         />
       </TabsContent>
     </Tabs>

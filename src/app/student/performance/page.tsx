@@ -14,12 +14,13 @@ export default async function StudentPerformancePage() {
 }
 
 async function PerformanceDashboard({ studentId }: { studentId: string }) {
-  const [examPerf, chapterPerf, wrongAnswers, unattempted, projectedScores] = await Promise.all([
+  const [examPerf, chapterPerf, wrongAnswers, unattempted, projectedScores, recentScores] = await Promise.all([
     getExamPerformance(studentId),
     getChapterPerformance(studentId),
     getWrongAnswers(studentId),
     getUnattemptedQuestions(studentId),
     getProjectedScores(studentId),
+    getProjectedScores(studentId, 'mht-cet', 'recent', 3),
   ])
 
   return (
@@ -31,6 +32,7 @@ async function PerformanceDashboard({ studentId }: { studentId: string }) {
         wrongData={wrongAnswers}
         unattemptedData={unattempted}
         projectedScores={projectedScores}
+        recentScores={recentScores}
       />
     </div>
   )

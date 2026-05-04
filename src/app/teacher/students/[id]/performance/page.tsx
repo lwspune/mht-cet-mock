@@ -22,12 +22,13 @@ export default async function StudentPerformancePage({ params }: { params: { id:
 
   if (!student) notFound()
 
-  const [examPerf, chapterPerf, wrongAnswers, unattempted, projectedScores] = await Promise.all([
+  const [examPerf, chapterPerf, wrongAnswers, unattempted, projectedScores, recentScores] = await Promise.all([
     getExamPerformance(student.id),
     getChapterPerformance(student.id),
     getWrongAnswers(student.id),
     getUnattemptedQuestions(student.id),
     getProjectedScores(student.id),
+    getProjectedScores(student.id, 'mht-cet', 'recent', 3),
   ])
 
   return (
@@ -48,6 +49,7 @@ export default async function StudentPerformancePage({ params }: { params: { id:
         wrongData={wrongAnswers}
         unattemptedData={unattempted}
         projectedScores={projectedScores}
+        recentScores={recentScores}
         showResetButtons
       />
     </div>

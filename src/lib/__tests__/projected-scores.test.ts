@@ -5,12 +5,14 @@ vi.mock('@/lib/db', () => ({
   db: {
     course: { findUnique: vi.fn() },
     attemptAnswer: { findMany: vi.fn() },
+    mockAttempt: { findMany: vi.fn() },
   },
 }))
 
 import { db } from '@/lib/db'
 const mockCourse = vi.mocked(db.course.findUnique)
 const mockAnswers = vi.mocked(db.attemptAnswer.findMany)
+const mockAttemptFindMany = vi.mocked(db.mockAttempt.findMany)
 
 const MILESTONES = [
   { label: 'Cutoff', pct: 0.30 },
@@ -154,5 +156,102 @@ describe('getProjectedScores', () => {
 
     const result = await getProjectedScores('student-1')
     expect(result[0].breakdown[0].accuracy).toBeCloseTo(0.5)
+  })
+})
+
+describe('getProjectedScores – recent mode', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('queries mockAttempt per subject with correct take and order', async () => {
+    mockCourse.mockResolvedValue(
+      makeCourse('Physics', 50, [{ id: 'ch-1', name: 'Optics', pct: 100 }]) as never,
+    )
+    mockAttemptFindMany.mockResolvedValue([] as never[])
+    mockAnswers.mockResolvedValue([] as never[])
+
+    await getProjectedScores('student-1', 'mht-cet', 'recent', 3)
+
+    expect(mockAttemptFindMany).toHaveBeenCalledOnce()
+    expect(mockAttemptFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ studentId: 'student-1', status: 'SUBMITTED' }),
+        orderBy: { submittedAt: 'desc' },
+        take: 3,
+      }),
+    )
+  })
+
+  it('filters answers to the returned attempt IDs', async () => {
+    mockCourse.mockResolvedValue(
+      makeCourse('Physics', 50, [{ id: 'ch-1', name: 'Optics', pct: 100 }]) as never,
+    )
+    mockAttemptFindMany.mockResolvedValue([{ id: 'attempt-recent' }] as never[])
+    mockAnswers.mockResolvedValue([makeAnswer('ch-1', true)] as never[])
+
+    await getProjectedScores('student-1', 'mht-cet', 'recent', 3)
+
+    expect(mockAnswers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          attempt: expect.objectContaining({ id: { in: ['attempt-recent'] } }),
+        }),
+      }),
+    )
+  })
+
+  it('computes accuracy from recent answers only', async () => {
+    mockCourse.mockResolvedValue(
+      makeCourse('Physics', 50, [{ id: 'ch-1', name: 'Optics', pct: 100 }]) as never,
+    )
+    mockAttemptFindMany.mockResolvedValue([{ id: 'attempt-1' }] as never[])
+    // Recent attempt: 3 correct out of 3
+    mockAnswers.mockResolvedValue([
+      makeAnswer('ch-1', true),
+      makeAnswer('ch-1', true),
+      makeAnswer('ch-1', true),
+    ] as never[])
+
+    const result = await getProjectedScores('student-1', 'mht-cet', 'recent', 1)
+    expect(result[0].breakdown[0].accuracy).toBeCloseTo(1)
+    expect(result[0].projected).toBeCloseTo(50)
+  })
+
+  it('shows accuracy null for chapters not covered by recent attempts', async () => {
+    mockCourse.mockResolvedValue(
+      makeCourse('Physics', 50, [
+        { id: 'ch-1', name: 'Optics', pct: 50 },
+        { id: 'ch-2', name: 'Mechanics', pct: 50 },
+      ]) as never,
+    )
+    mockAttemptFindMany.mockResolvedValue([{ id: 'attempt-1' }] as never[])
+    // Only ch-1 appears in recent answers
+    mockAnswers.mockResolvedValue([makeAnswer('ch-1', true)] as never[])
+
+    const result = await getProjectedScores('student-1', 'mht-cet', 'recent', 1)
+    const ch2 = result[0].breakdown.find((b) => b.chapterName === 'Mechanics')!
+    expect(ch2.accuracy).toBeNull()
+    expect(ch2.projected).toBe(0)
+  })
+
+  it('shows all chapters as not tested when no recent attempts exist', async () => {
+    mockCourse.mockResolvedValue(
+      makeCourse('Physics', 50, [{ id: 'ch-1', name: 'Optics', pct: 100 }]) as never,
+    )
+    mockAttemptFindMany.mockResolvedValue([] as never[])
+    mockAnswers.mockResolvedValue([] as never[])
+
+    const result = await getProjectedScores('student-1', 'mht-cet', 'recent', 3)
+    expect(result[0].breakdown[0].accuracy).toBeNull()
+    expect(result[0].projected).toBe(0)
+  })
+
+  it('does not call mockAttempt in all mode', async () => {
+    mockCourse.mockResolvedValue(
+      makeCourse('Physics', 50, [{ id: 'ch-1', name: 'Optics', pct: 100 }]) as never,
+    )
+    mockAnswers.mockResolvedValue([] as never[])
+
+    await getProjectedScores('student-1', 'mht-cet', 'all')
+    expect(mockAttemptFindMany).not.toHaveBeenCalled()
   })
 })
