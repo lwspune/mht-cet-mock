@@ -9,23 +9,23 @@ Two roles: **Teacher** (creates mocks, manages students) and **Student** (attemp
 ### UI
 - All student-facing screens must be mobile-first. Use Tailwind responsive prefixes (`sm:`, `md:`) and test layouts at 375px width. Touch targets must be at least 44px. Avoid horizontal scroll.
 
-### Backend Integrity
-- Enforce data rules at the DB level (FK, CHECK constraints, NOT NULL, triggers), not just in app code. Validate and reject bad input at the edge function boundary before any external API call (fail fast). Use transactions for multi-step writes. Return a consistent shape: `{ data }` on success, `{ error }` on failure. Keep all scoring and business logic server-side — never in client JS.
+### Backend Integrity (project additions)
+- API response shape must be `{ data }` on success, `{ error }` on failure — no exceptions. Scoring and grading logic must stay server-side, never in client JS.
 
-### Accessibility
+### Accessibility (project addition)
 - Use Tailwind `focus-visible:` utilities for focus styles on all interactive elements.
 
-### Definition of Done
-- Golden path must be verified in the browser at 375px width specifically.
+### Definition of Done (project override)
+- Golden path must be verified in the browser at **375px width** specifically.
 
-### Security
-- Validate and sanitize all user input at system boundaries. Avoid XSS — never use `dangerouslySetInnerHTML` with user-supplied content. Keep RLS enabled on all Supabase tables.
+### Security (project additions)
+- Never use `dangerouslySetInnerHTML` with user-supplied content. Keep RLS enabled on all Supabase tables.
 
-### Dependency Management
-- Existing stack is React, Tailwind, and Supabase — exhaust these before adding a new package.
+### Dependency Management (project context)
+- Stack is Next.js, Tailwind, Supabase, Prisma — exhaust these before adding any package.
 
-### Test Scope
-- For edge functions, prefer integration tests over mocks.
+### Test Scope (project addition)
+- Prefer integration tests over mocks for API routes. Unit-test pure utility functions.
 
 ### Function Size / Cohesion
 - Each function or component should do one thing. If you need "and" to describe what it does, split it. Prefer small, named functions over large inline logic blocks.
@@ -145,7 +145,7 @@ DIRECT_URL                      # Same as DATABASE_URL for this project
 ```bash
 npm run dev          # start dev server
 npm run db:push      # push schema changes to Supabase
-npm run db:seed      # seed subjects + chapters (idempotent upserts)
+npm run db:seed      # seed subjects, chapters, MHT CET course config + chapter frequencies (idempotent)
 npx prisma studio    # browse DB in browser
 npx vitest           # run all tests (122 tests, 10 suites)
 npx vitest run       # run once (no watch mode)
@@ -159,6 +159,7 @@ npx vitest run       # run once (no watch mode)
 | `src/lib/performance.ts` | 7 query functions: 4 for performance tabs + `getDashboardInsights` + `getProjectedScores` + `getSubjectFrequencies` |
 | `src/lib/supabase/server.ts` | `createClient()` + `createAdminClient()` |
 | `src/middleware.ts` | Session refresh on every request |
+| `src/app/student/performance/PerformanceTabs.tsx` | Client shell for all 5 performance tabs + subject filter |
 | `src/components/math/KatexRenderer.tsx` | KaTeX renderer |
 | `src/components/teacher/QuestionEditor.tsx` | Question add/edit with live KaTeX preview + image upload |
 | `src/components/teacher/QuestionEditDialog.tsx` | Edit/delete question dialog (pencil icon on question list) |
