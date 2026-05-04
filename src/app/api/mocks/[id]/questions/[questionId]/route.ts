@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { apiRequireRole } from '@/lib/auth'
+import { rescoreSubmittedAttempts } from '@/lib/scoring'
 import { z } from 'zod'
 
 const optionUpdateSchema = z.object({
@@ -48,24 +49,27 @@ export async function PATCH(
 
   const { chapterId, text, imageUrl, solution, pyqYear, marks, negMarks, options } = parsed.data
 
-  await db.$transaction([
-    db.question.update({
+  const rescoredAttempts = await db.$transaction(async (tx) => {
+    await tx.question.update({
       where: { id: params.questionId },
       data: { chapterId, text, imageUrl: imageUrl ?? null, solution: solution ?? null, pyqYear: pyqYear ?? null, marks, negMarks },
-    }),
-    ...options.map((opt) =>
-      db.option.update({
-        where: { id: opt.id },
-        data: { text: opt.text, imageUrl: opt.imageUrl ?? null, isCorrect: opt.isCorrect },
-      })
-    ),
-  ])
+    })
+    await Promise.all(
+      options.map((opt) =>
+        tx.option.update({
+          where: { id: opt.id },
+          data: { text: opt.text, imageUrl: opt.imageUrl ?? null, isCorrect: opt.isCorrect },
+        })
+      )
+    )
+    return rescoreSubmittedAttempts(params.id, tx as Parameters<Parameters<typeof db.$transaction>[0]>[0])
+  })
 
   const updated = await db.question.findUnique({
     where: { id: params.questionId },
     include: { options: true, chapter: true },
   })
-  return NextResponse.json(updated)
+  return NextResponse.json({ ...updated, rescoredAttempts })
 }
 
 export async function DELETE(

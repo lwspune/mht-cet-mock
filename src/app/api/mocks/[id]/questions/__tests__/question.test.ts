@@ -38,11 +38,23 @@ const dbMock = {
     delete: vi.fn().mockResolvedValue(mockQuestion),
   },
   option: {
-    update: vi.fn().mockImplementation(({ where, data }) =>
+    update: vi.fn().mockImplementation(({ where, data }: { where: { id: string }; data: object }) =>
       Promise.resolve({ id: where.id, ...data })
     ),
   },
-  $transaction: vi.fn().mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops)),
+  mockAttempt: {
+    findMany: vi.fn().mockResolvedValue([]),
+    update: vi.fn().mockResolvedValue({}),
+  },
+  attemptAnswer: {
+    update: vi.fn().mockResolvedValue({}),
+  },
+  $transaction: vi.fn().mockImplementation((arg: unknown) => {
+    if (typeof arg === 'function') {
+      return (arg as (tx: typeof dbMock) => Promise<unknown>)(dbMock)
+    }
+    return Promise.all(arg as Promise<unknown>[])
+  }),
 }
 
 vi.mock('@/lib/db', () => ({ db: dbMock }))
@@ -90,6 +102,9 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
     dbMock.$transaction.mockClear()
     dbMock.question.update.mockClear()
     dbMock.option.update.mockClear()
+    dbMock.mockAttempt.findMany.mockResolvedValue([])
+    dbMock.mockAttempt.update.mockClear()
+    dbMock.attemptAnswer.update.mockClear()
     dbMock.question.findUnique.mockResolvedValue({ ...mockQuestion, options: mockOptions, chapter: { id: 'ch-1', name: 'Vectors' } })
   })
 
@@ -162,6 +177,91 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
       expect.objectContaining({
         data: expect.objectContaining({ pyqYear: null }),
       })
+    )
+  })
+
+  it('returns rescoredAttempts count in response', async () => {
+    dbMock.mockAttempt.findMany.mockResolvedValueOnce([
+      {
+        id: 'attempt-1',
+        mock: { marksCorrect: 2, marksWrong: 0.5 },
+        answers: [],
+      },
+    ])
+    const res = await PATCH(patchRequest(makePayload()), routeParams)
+    const json = await res.json()
+    expect(json.rescoredAttempts).toBe(1)
+  })
+
+  it('updates AttemptAnswer.isCorrect to false when selected answer is now wrong', async () => {
+    dbMock.mockAttempt.findMany.mockResolvedValueOnce([
+      {
+        id: 'attempt-1',
+        mock: { marksCorrect: 2, marksWrong: 0.5 },
+        answers: [
+          {
+            id: 'ans-1',
+            selectedOptionId: 'opt-1',
+            question: { marks: 2, negMarks: 0.5 },
+            selectedOption: { isCorrect: false }, // opt-1 is now wrong
+          },
+        ],
+      },
+    ])
+    await PATCH(patchRequest(makePayload()), routeParams)
+    expect(dbMock.attemptAnswer.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'ans-1' }, data: { isCorrect: false } })
+    )
+    expect(dbMock.mockAttempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'attempt-1' }, data: expect.objectContaining({ score: -0.5 }) })
+    )
+  })
+
+  it('updates AttemptAnswer.isCorrect to true when selected answer is now correct', async () => {
+    dbMock.mockAttempt.findMany.mockResolvedValueOnce([
+      {
+        id: 'attempt-1',
+        mock: { marksCorrect: 2, marksWrong: 0.5 },
+        answers: [
+          {
+            id: 'ans-1',
+            selectedOptionId: 'opt-2',
+            question: { marks: 2, negMarks: 0.5 },
+            selectedOption: { isCorrect: true }, // opt-2 is now correct
+          },
+        ],
+      },
+    ])
+    await PATCH(patchRequest(makePayload()), routeParams)
+    expect(dbMock.attemptAnswer.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'ans-1' }, data: { isCorrect: true } })
+    )
+    expect(dbMock.mockAttempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'attempt-1' }, data: expect.objectContaining({ score: 2 }) })
+    )
+  })
+
+  it('leaves unattempted answers with isCorrect null and does not affect score', async () => {
+    dbMock.mockAttempt.findMany.mockResolvedValueOnce([
+      {
+        id: 'attempt-1',
+        mock: { marksCorrect: 2, marksWrong: 0.5 },
+        answers: [
+          {
+            id: 'ans-1',
+            selectedOptionId: null,
+            question: { marks: 2, negMarks: 0.5 },
+            selectedOption: null,
+          },
+        ],
+      },
+    ])
+    await PATCH(patchRequest(makePayload()), routeParams)
+    expect(dbMock.attemptAnswer.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'ans-1' }, data: { isCorrect: null } })
+    )
+    expect(dbMock.mockAttempt.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'attempt-1' }, data: expect.objectContaining({ score: 0 }) })
     )
   })
 })
