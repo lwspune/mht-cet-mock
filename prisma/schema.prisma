@@ -35,24 +35,63 @@ model User {
 }
 
 model Subject {
-  id       String    @id @default(cuid())
-  name     String    @unique
-  chapters Chapter[]
-  mocks    Mock[]
+  id                 String               @id @default(cuid())
+  name               String               @unique
+  chapters           Chapter[]
+  mocks              Mock[]
+  courseSubjectConfigs CourseSubjectConfig[]
 
   @@map("subjects")
 }
 
 model Chapter {
-  id         String     @id @default(cuid())
-  subjectId  String
-  name       String
-  orderIndex Int
-  subject    Subject    @relation(fields: [subjectId], references: [id])
-  questions  Question[]
+  id          String             @id @default(cuid())
+  subjectId   String
+  name        String
+  orderIndex  Int
+  subject     Subject            @relation(fields: [subjectId], references: [id])
+  questions   Question[]
+  frequencies ChapterFrequency[]
 
   @@unique([subjectId, orderIndex])
   @@map("chapters")
+}
+
+model Course {
+  id             String               @id @default(cuid())
+  name           String               @unique
+  slug           String               @unique
+  subjectConfigs CourseSubjectConfig[]
+  frequencies    ChapterFrequency[]
+
+  @@map("courses")
+}
+
+model CourseSubjectConfig {
+  id              String   @id @default(cuid())
+  courseId        String
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  subjectId       String
+  subject         Subject  @relation(fields: [subjectId], references: [id])
+  maxMarks        Int
+  marksPerQ       Float
+  negMarkFraction Float    @default(0.25)
+  milestones      Json     @default("[{\"label\":\"Cutoff\",\"pct\":0.30},{\"label\":\"Merit\",\"pct\":0.50},{\"label\":\"Rank\",\"pct\":0.70}]")
+
+  @@unique([courseId, subjectId])
+  @@map("course_subject_configs")
+}
+
+model ChapterFrequency {
+  id        String  @id @default(cuid())
+  courseId  String
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  pct       Float
+
+  @@unique([courseId, chapterId])
+  @@map("chapter_frequencies")
 }
 
 model Mock {

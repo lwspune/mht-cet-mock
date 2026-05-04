@@ -144,6 +144,44 @@ export interface UnattemptedQuestion {
   options: UnattemptedOption[]
 }
 
+// Score predictor types
+export interface Milestone {
+  label: string
+  pct: number // fraction of maxMarks, e.g. 0.30
+}
+
+export interface ChapterProjection {
+  chapterId: string
+  chapterName: string
+  marksAtStake: number
+  projected: number
+  accuracy: number | null // null = never tested
+  gap: number
+}
+
+export interface SubjectProjection {
+  subjectName: string
+  maxMarks: number
+  projected: number
+  milestones: Milestone[]
+  breakdown: ChapterProjection[] // sorted by gap desc
+}
+
+// Frequency table types (teacher editor)
+export interface ChapterFrequencyRow {
+  chapterId: string
+  chapterName: string
+  pct: number
+  marksAtStake: number // pct/100 * subjectMaxMarks
+}
+
+export interface SubjectFrequency {
+  subjectName: string
+  subjectId: string
+  maxMarks: number
+  chapters: ChapterFrequencyRow[]
+}
+
 export type ReviewFilter = 'correct' | 'wrong' | 'unattempted'
 
 export interface ReviewOption {

@@ -114,6 +114,96 @@ const PCM_CHAPTERS = {
   ],
 }
 
+// MHT CET marks: Physics 50×1, Chemistry 50×1, Maths 50×2
+const MHT_CET_SUBJECT_CONFIG: Record<string, { maxMarks: number; marksPerQ: number }> = {
+  Physics:   { maxMarks: 50,  marksPerQ: 1 },
+  Chemistry: { maxMarks: 50,  marksPerQ: 1 },
+  Maths:     { maxMarks: 100, marksPerQ: 2 },
+}
+
+const MHT_CET_MILESTONES = [
+  { label: 'Cutoff', pct: 0.30 },
+  { label: 'Merit',  pct: 0.50 },
+  { label: 'Rank',   pct: 0.70 },
+]
+
+async function seedMhtCetCourse() {
+  console.log('\nSeeding MHT CET course...')
+
+  const course = await prisma.course.upsert({
+    where: { slug: 'mht-cet' },
+    update: { name: 'MHT CET' },
+    create: { name: 'MHT CET', slug: 'mht-cet' },
+  })
+
+  // Upsert subject configs
+  for (const [subjectName, cfg] of Object.entries(MHT_CET_SUBJECT_CONFIG)) {
+    const subject = await prisma.subject.findUnique({ where: { name: subjectName } })
+    if (!subject) { console.warn(`  ⚠ Subject ${subjectName} not found — run seed again after subjects are seeded`); continue }
+
+    await prisma.courseSubjectConfig.upsert({
+      where: { courseId_subjectId: { courseId: course.id, subjectId: subject.id } },
+      update: { maxMarks: cfg.maxMarks, marksPerQ: cfg.marksPerQ, milestones: MHT_CET_MILESTONES },
+      create: {
+        courseId: course.id,
+        subjectId: subject.id,
+        maxMarks: cfg.maxMarks,
+        marksPerQ: cfg.marksPerQ,
+        negMarkFraction: 0.25,
+        milestones: MHT_CET_MILESTONES,
+      },
+    })
+    console.log(`  ✓ ${subjectName}: maxMarks=${cfg.maxMarks}, marksPerQ=${cfg.marksPerQ}`)
+  }
+
+  // Compute chapter frequencies from PYQ question distribution
+  // Count questions per chapter across all mocks that have at least one PYQ question
+  const pyqCounts = await prisma.question.groupBy({
+    by: ['chapterId'],
+    where: { pyqYear: { not: null } },
+    _count: { id: true },
+  })
+
+  if (pyqCounts.length === 0) {
+    console.log('  ℹ No PYQ questions found — chapter frequencies skipped (run after importing PYQs)')
+    return
+  }
+
+  // Build a map chapterId → count
+  const countByChapter = new Map(pyqCounts.map((r) => [r.chapterId, r._count.id]))
+
+  // For each subject, compute pct = count / subjectTotal * 100, then upsert
+  for (const subjectName of Object.keys(MHT_CET_SUBJECT_CONFIG)) {
+    const subject = await prisma.subject.findUnique({
+      where: { name: subjectName },
+      include: { chapters: true },
+    })
+    if (!subject) continue
+
+    const subjectTotal = subject.chapters.reduce(
+      (sum, ch) => sum + (countByChapter.get(ch.id) ?? 0),
+      0,
+    )
+    if (subjectTotal === 0) {
+      console.log(`  ℹ ${subjectName}: no PYQ questions — frequencies skipped`)
+      continue
+    }
+
+    for (const chapter of subject.chapters) {
+      const count = countByChapter.get(chapter.id) ?? 0
+      const pct = (count / subjectTotal) * 100
+
+      await prisma.chapterFrequency.upsert({
+        where: { courseId_chapterId: { courseId: course.id, chapterId: chapter.id } },
+        update: { pct },
+        create: { courseId: course.id, chapterId: chapter.id, pct },
+      })
+    }
+
+    console.log(`  ✓ ${subjectName}: frequencies computed from ${subjectTotal} PYQ questions`)
+  }
+}
+
 async function main() {
   console.log('Seeding subjects and chapters...')
 
@@ -139,7 +229,9 @@ async function main() {
     console.log(`  ✓ ${subjectName}: ${chapters.length} chapters`)
   }
 
-  console.log('Seeding complete.')
+  await seedMhtCetCourse()
+
+  console.log('\nSeeding complete.')
 }
 
 main()

@@ -4,6 +4,7 @@ import {
   getChapterPerformance,
   getWrongAnswers,
   getUnattemptedQuestions,
+  getProjectedScores,
 } from '@/lib/performance'
 import PerformanceTabs from './PerformanceTabs'
 
@@ -13,11 +14,12 @@ export default async function StudentPerformancePage() {
 }
 
 async function PerformanceDashboard({ studentId }: { studentId: string }) {
-  const [examPerf, chapterPerf, wrongAnswers, unattempted] = await Promise.all([
+  const [examPerf, chapterPerf, wrongAnswers, unattempted, projectedScores] = await Promise.all([
     getExamPerformance(studentId),
     getChapterPerformance(studentId),
     getWrongAnswers(studentId),
     getUnattemptedQuestions(studentId),
+    getProjectedScores(studentId),
   ])
 
   return (
@@ -28,6 +30,7 @@ async function PerformanceDashboard({ studentId }: { studentId: string }) {
         chapterData={chapterPerf}
         wrongData={wrongAnswers}
         unattemptedData={unattempted}
+        projectedScores={projectedScores}
       />
     </div>
   )

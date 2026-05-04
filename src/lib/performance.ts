@@ -4,6 +4,9 @@ import type {
   ChapterPerformance,
   WrongAnswer,
   UnattemptedQuestion,
+  SubjectProjection,
+  SubjectFrequency,
+  Milestone,
 } from '@/types'
 
 export async function getExamPerformance(studentId: string): Promise<ExamPerformance[]> {
@@ -176,6 +179,122 @@ export async function getDashboardInsights(studentId: string): Promise<{
     .slice(0, 3)
 
   return { subjectAccuracy, weakChapters }
+}
+
+export async function getProjectedScores(
+  studentId: string,
+  courseSlug = 'mht-cet',
+): Promise<SubjectProjection[]> {
+  const course = await db.course.findUnique({
+    where: { slug: courseSlug },
+    include: {
+      subjectConfigs: {
+        include: { subject: true },
+        orderBy: { subject: { name: 'asc' } },
+      },
+      frequencies: {
+        include: { chapter: { include: { subject: true } } },
+      },
+    },
+  })
+
+  if (!course) return []
+
+  // Per-chapter accuracy from all submitted attempts for this student
+  const answers = await db.attemptAnswer.findMany({
+    where: { attempt: { studentId, status: 'SUBMITTED' } },
+    select: { isCorrect: true, selectedOptionId: true, question: { select: { chapterId: true } } },
+  })
+
+  const chapterStats = new Map<string, { correct: number; total: number }>()
+  for (const a of answers) {
+    const cid = a.question.chapterId
+    if (!chapterStats.has(cid)) chapterStats.set(cid, { correct: 0, total: 0 })
+    const s = chapterStats.get(cid)!
+    s.total++
+    if (a.isCorrect === true) s.correct++
+  }
+
+  return course.subjectConfigs.map((config) => {
+    const subjectFreqs = course.frequencies.filter(
+      (f) => f.chapter.subjectId === config.subjectId,
+    )
+
+    const breakdown = subjectFreqs.map((f) => {
+      const marksAtStake = (f.pct / 100) * config.maxMarks
+      const stats = chapterStats.get(f.chapterId)
+
+      if (!stats || stats.total === 0) {
+        return {
+          chapterId: f.chapterId,
+          chapterName: f.chapter.name,
+          marksAtStake,
+          projected: 0,
+          accuracy: null,
+          gap: marksAtStake,
+        }
+      }
+
+      const accuracy = stats.correct / stats.total
+      const projected = accuracy * marksAtStake
+      return {
+        chapterId: f.chapterId,
+        chapterName: f.chapter.name,
+        marksAtStake,
+        projected,
+        accuracy,
+        gap: marksAtStake - projected,
+      }
+    })
+
+    breakdown.sort((a, b) => b.gap - a.gap)
+
+    const projectedTotal = breakdown.reduce((sum, c) => sum + c.projected, 0)
+
+    return {
+      subjectName: config.subject.name,
+      maxMarks: config.maxMarks,
+      projected: Math.round(projectedTotal * 10) / 10,
+      milestones: config.milestones as unknown as Milestone[],
+      breakdown,
+    }
+  })
+}
+
+export async function getSubjectFrequencies(courseSlug = 'mht-cet'): Promise<SubjectFrequency[]> {
+  const course = await db.course.findUnique({
+    where: { slug: courseSlug },
+    include: {
+      subjectConfigs: {
+        include: {
+          subject: {
+            include: { chapters: { orderBy: { orderIndex: 'asc' } } },
+          },
+        },
+        orderBy: { subject: { name: 'asc' } },
+      },
+      frequencies: true,
+    },
+  })
+
+  if (!course) return []
+
+  const freqMap = new Map(course.frequencies.map((f) => [f.chapterId, f.pct]))
+
+  return course.subjectConfigs.map((config) => ({
+    subjectName: config.subject.name,
+    subjectId: config.subjectId,
+    maxMarks: config.maxMarks,
+    chapters: config.subject.chapters.map((ch) => {
+      const pct = freqMap.get(ch.id) ?? 0
+      return {
+        chapterId: ch.id,
+        chapterName: ch.name,
+        pct,
+        marksAtStake: (pct / 100) * config.maxMarks,
+      }
+    }),
+  }))
 }
 
 export async function getUnattemptedQuestions(studentId: string): Promise<UnattemptedQuestion[]> {

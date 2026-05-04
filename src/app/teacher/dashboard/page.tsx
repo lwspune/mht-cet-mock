@@ -47,12 +47,15 @@ export default async function TeacherDashboard() {
         </Card>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         <Button asChild>
           <Link href="/teacher/mocks/new">+ Create Mock</Link>
         </Button>
         <Button variant="outline" asChild>
           <Link href="/teacher/students">Manage Students</Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/teacher/frequency">Frequency Table</Link>
         </Button>
       </div>
 
