@@ -7,6 +7,7 @@ import {
   getChapterPerformance,
   getWrongAnswers,
   getUnattemptedQuestions,
+  getProjectedScores,
 } from '@/lib/performance'
 import { Button } from '@/components/ui/button'
 import PerformanceTabs from '@/app/student/performance/PerformanceTabs'
@@ -21,11 +22,12 @@ export default async function StudentPerformancePage({ params }: { params: { id:
 
   if (!student) notFound()
 
-  const [examPerf, chapterPerf, wrongAnswers, unattempted] = await Promise.all([
+  const [examPerf, chapterPerf, wrongAnswers, unattempted, projectedScores] = await Promise.all([
     getExamPerformance(student.id),
     getChapterPerformance(student.id),
     getWrongAnswers(student.id),
     getUnattemptedQuestions(student.id),
+    getProjectedScores(student.id),
   ])
 
   return (
@@ -45,6 +47,7 @@ export default async function StudentPerformancePage({ params }: { params: { id:
         chapterData={chapterPerf}
         wrongData={wrongAnswers}
         unattemptedData={unattempted}
+        projectedScores={projectedScores}
         showResetButtons
       />
     </div>
