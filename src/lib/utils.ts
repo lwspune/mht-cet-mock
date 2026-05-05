@@ -20,6 +20,10 @@ export function formatSeconds(secs: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+export function formatCourseSlug(slug: string): string {
+  return slug.toUpperCase().replace(/-/g, ' ')
+}
+
 export function calcScore(
   answers: Array<{ isCorrect: boolean | null; selectedOptionId: string | null }>,
   marksCorrect: number,

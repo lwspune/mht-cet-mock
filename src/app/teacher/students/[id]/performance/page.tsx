@@ -17,7 +17,7 @@ export default async function StudentPerformancePage({ params }: { params: { id:
 
   const student = await db.user.findUnique({
     where: { id: params.id, createdBy: teacher.id, role: 'STUDENT' },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, courseSlug: true },
   })
 
   if (!student) notFound()
@@ -27,8 +27,8 @@ export default async function StudentPerformancePage({ params }: { params: { id:
     getChapterPerformance(student.id),
     getWrongAnswers(student.id),
     getUnattemptedQuestions(student.id),
-    getProjectedScores(student.id),
-    getProjectedScores(student.id, 'mht-cet', 'recent', 3),
+    getProjectedScores(student.id, student.courseSlug),
+    getProjectedScores(student.id, student.courseSlug, 'recent', 3),
   ])
 
   return (

@@ -17,6 +17,7 @@
 # misc
 .DS_Store
 *.pem
+cost_structure.md
 
 # MCP config (contains API tokens — never commit)
 .mcp.json

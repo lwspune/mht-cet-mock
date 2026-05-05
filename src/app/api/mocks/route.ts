@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   if (user.role === 'STUDENT') {
     const mocks = await db.mock.findMany({
-      where: { isPublished: true, ...(subjectId ? { subjectId } : {}) },
+      where: { isPublished: true, courseSlug: user.courseSlug, ...(subjectId ? { subjectId } : {}) },
       include: { subject: true, _count: { select: { questions: true } } },
       orderBy: { createdAt: 'desc' },
     })
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   const mocks = await db.mock.findMany({
-    where: { createdBy: user.id, ...(subjectId ? { subjectId } : {}) },
+    where: { createdBy: user.id, courseSlug: user.courseSlug, ...(subjectId ? { subjectId } : {}) },
     include: { subject: true, _count: { select: { questions: true, attempts: true } } },
     orderBy: { createdAt: 'desc' },
   })
@@ -47,8 +47,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
+  const allowedConfigs = await db.courseSubjectConfig.findMany({
+    where: { course: { slug: teacher.courseSlug } },
+    select: { subjectId: true },
+  })
+  const allowedSubjectIds = new Set(allowedConfigs.map((c) => c.subjectId))
+  if (!allowedSubjectIds.has(parsed.data.subjectId)) {
+    return NextResponse.json({ error: 'Subject does not belong to your course' }, { status: 400 })
+  }
+
   const mock = await db.mock.create({
-    data: { ...parsed.data, createdBy: teacher.id },
+    data: { ...parsed.data, createdBy: teacher.id, courseSlug: teacher.courseSlug },
   })
 
   return NextResponse.json(mock, { status: 201 })

@@ -147,7 +147,7 @@ npm run dev          # start dev server
 npm run db:push      # push schema changes to Supabase
 npm run db:seed      # seed subjects, chapters, MHT CET course config + chapter frequencies (idempotent)
 npx prisma studio    # browse DB in browser
-npx vitest           # run all tests (122 tests, 10 suites)
+npx vitest           # run all tests (132 tests, 10 suites)
 npx vitest run       # run once (no watch mode)
 ```
 
@@ -156,7 +156,8 @@ npx vitest run       # run once (no watch mode)
 |---|---|
 | `src/lib/auth.ts` | Auth helpers (see Auth Pattern above) |
 | `src/lib/db.ts` | Prisma client singleton |
-| `src/lib/performance.ts` | 7 query functions: 4 for performance tabs + `getDashboardInsights` + `getProjectedScores` + `getSubjectFrequencies` |
+| `src/lib/performance.ts` | 7 query functions: 4 for performance tabs + `getDashboardInsights` + `getProjectedScores(studentId, courseSlug, mode, recentN)` + `getSubjectFrequencies` |
+| `src/lib/scoring.ts` | `rescoreSubmittedAttempts(mockId, tx)` — recomputes `AttemptAnswer.isCorrect` + `MockAttempt.score/maxScore` for all SUBMITTED attempts; called inside PATCH question transaction |
 | `src/lib/supabase/server.ts` | `createClient()` + `createAdminClient()` |
 | `src/middleware.ts` | Session refresh on every request |
 | `src/app/student/performance/PerformanceTabs.tsx` | Client shell for all 5 performance tabs + subject filter |
@@ -183,7 +184,7 @@ npx vitest run       # run once (no watch mode)
 | `src/app/teacher/frequency/page.tsx` | Teacher frequency table editor page |
 | `src/components/teacher/FrequencyTableEditor.tsx` | Editable pct table per chapter, Save All, Reset to PYQ Defaults |
 | `src/components/performance/ProjectedScoreCard.tsx` | Per-subject predictor card: score, progress bar, milestones, top-6 chapters |
-| `src/components/performance/ScorePredictorTab.tsx` | PCM total + 3 subject cards, subject-filter aware |
+| `src/components/performance/ScorePredictorTab.tsx` | PCM total + 3 subject cards, subject-filter aware. Toggle between All-time and Recent (Last 3) modes; accepts `data` + optional `recentData` prop |
 | `prisma/schema.prisma` | Full DB schema |
 | `prisma/seed.ts` | PCM subjects + chapters + MHT CET course config + chapter frequencies from PYQ data |
 
@@ -209,16 +210,16 @@ Optional header: `PYQ` — year string (e.g. `"2021"`). When present and non-emp
 ## Tests
 Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Prisma client requires a live DB URL which isn't available in test environment.
 
-**122 tests, 10 suites** — `npx vitest run`
+**132 tests, 10 suites** — `npx vitest run`
 
 | File | Coverage |
 |---|---|
 | `src/lib/__tests__/import-utils.test.ts` | `convertLatex`, `answerLetterToIndex`, `deriveTitleFromFilename` (22 tests) |
 | `src/lib/__tests__/performance.test.ts` | `getDashboardInsights` — subject accuracy, weak chapters, sort order (6 tests) |
-| `src/lib/__tests__/projected-scores.test.ts` | `getProjectedScores` — accuracy, not-tested, gap sort, milestones (7 tests) |
+| `src/lib/__tests__/projected-scores.test.ts` | `getProjectedScores` — accuracy, not-tested, gap sort, milestones + recent mode (13 tests) |
 | `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (20 tests, incl. subtopicName + pyqYear) |
 | `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (20 tests, incl. subtopicName + solution + pyqYear) |
-| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution + pyqYear fields (14 tests) |
+| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution + pyqYear + rescore (18 tests) |
 | `src/app/api/mocks/[id]/attempts/__tests__/attempts.test.ts` | DELETE bulk-reset — auth, ownership, count (4 tests) |
 | `src/app/api/attempts/__tests__/attempt.test.ts` | DELETE attempt — teacher + student auth paths, allowReattempt gate (8 tests) |
 | `src/app/api/attempts/[id]/questions/__tests__/questions.test.ts` | GET questions with filter — auth, filter values (9 tests) |
@@ -254,9 +255,14 @@ Shows a PCM combined total card + 3 per-subject `ProjectedScoreCard`s. Each card
 - Top-6 chapters by gap (marksAtStake − projected), sorted largest-gap first
 - Chapters never answered shown as `0.0 / X.X  not tested`
 
-**Algorithm:** `projected = (correct / total) × marksAtStake` per chapter. `marksAtStake = (pct / 100) × subjectMaxMarks`. Subject filter on the tab reduces cards shown (e.g. "Physics" shows only the Physics card).
+**Toggle:** "All-time" vs "Recent (Last 3)". Both datasets are pre-fetched server-side in the same `Promise.all`; the toggle is instant client state. Recent mode uses the last 3 submitted mocks **per subject** so each subject has its own recency window. Toggle only renders when recent data exists.
+
+**Algorithm:** `projected = (correct / total) × marksAtStake` per chapter. `marksAtStake = (pct / 100) × subjectMaxMarks`. `getProjectedScores` accepts `mode: 'all' | 'recent'` and `recentN = 3`; in recent mode it fetches the last N `MockAttempt` IDs per subject before filtering answers.
 
 **Teacher frequency editor** at `/teacher/frequency` — editable pct per chapter per subject, must sum to 100%. "Reset to PYQ Defaults" button recomputes from live PYQ question distribution via `PUT /api/course/mht-cet/frequency`.
+
+### Answer Key Correction + Rescore
+When a teacher edits a question via `PATCH /api/mocks/[id]/questions/[questionId]`, all SUBMITTED attempts for that mock are rescored atomically in the same interactive transaction. `rescoreSubmittedAttempts` (in `src/lib/scoring.ts`) recomputes `AttemptAnswer.isCorrect` from the updated `Option.isCorrect` values and recalculates `MockAttempt.score` + `maxScore` from scratch. Response includes `rescoredAttempts: number`.
 
 ## DB Seed Data
 

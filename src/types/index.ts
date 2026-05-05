@@ -9,6 +9,7 @@ export interface UserProfile {
   role: Role
   createdBy?: string | null
   createdAt: Date
+  courseSlug: string
 }
 
 export interface Subject {

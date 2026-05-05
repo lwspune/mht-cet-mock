@@ -19,18 +19,20 @@ enum AttemptStatus {
 }
 
 model User {
-  id        String   @id // matches Supabase auth.users.id (UUID)
-  email     String   @unique
-  name      String
-  role      Role     @default(STUDENT)
-  createdBy String?  // teacher id who created this student
-  createdAt DateTime @default(now())
+  id         String   @id // matches Supabase auth.users.id (UUID)
+  email      String   @unique
+  name       String
+  role       Role     @default(STUDENT)
+  createdBy  String?  // teacher id who created this student
+  createdAt  DateTime @default(now())
+  courseSlug String   @default("mht-cet")
 
   teacher         User?         @relation("TeacherStudents", fields: [createdBy], references: [id])
   students        User[]        @relation("TeacherStudents")
   createdMocks    Mock[]        @relation("CreatedMocks")
   attempts        MockAttempt[]
 
+  @@index([courseSlug])
   @@map("users")
 }
 
@@ -99,6 +101,7 @@ model Mock {
   title          String
   subjectId      String
   createdBy      String
+  courseSlug     String   @default("mht-cet")
   durationMins   Int      @default(180)
   marksCorrect   Float    @default(2)
   marksWrong     Float    @default(0)
@@ -111,6 +114,8 @@ model Mock {
   questions Question[]
   attempts  MockAttempt[]
 
+  @@index([createdBy, courseSlug])
+  @@index([isPublished, courseSlug])
   @@map("mocks")
 }
 

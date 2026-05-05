@@ -58,17 +58,26 @@ export async function POST(request: NextRequest) {
     chapterMap.set(`${ch.subject.name}|${ch.name}`, ch.id)
   }
 
-  const subjectRecords = await db.subject.findMany()
-  const subjectIdMap = new Map(subjectRecords.map((s) => [s.name, s.id]))
+  const courseConfigs = await db.courseSubjectConfig.findMany({
+    where: { course: { slug: teacher.courseSlug } },
+    include: { subject: true },
+  })
+  const validSubjectMap = new Map(
+    courseConfigs.map((c) => [c.subject.name.trim().toLowerCase(), c.subjectId])
+  )
 
   // Phase 1: Validate ALL mocks before writing anything.
   // If any mock fails, return 400 without starting a single transaction.
   const validatedMocks: ValidatedMock[] = []
 
   for (const mockPayload of mocks) {
-    const subjectId = subjectIdMap.get(mockPayload.subjectKey)
+    const normalizedKey = mockPayload.subjectKey.trim().toLowerCase()
+    const subjectId = validSubjectMap.get(normalizedKey)
     if (!subjectId) {
-      return NextResponse.json({ error: `Unknown subject: ${mockPayload.subjectKey}` }, { status: 400 })
+      return NextResponse.json(
+        { error: `Subject '${mockPayload.subjectKey}' not found in course '${teacher.courseSlug}'` },
+        { status: 400 }
+      )
     }
 
     const resolved = mockPayload.questions.map((q) => {
@@ -122,7 +131,7 @@ export async function POST(request: NextRequest) {
       )
 
       await db.$transaction([
-        db.mock.create({ data: { id: mockId, title, subjectId, createdBy: teacher.id, durationMins, marksCorrect, marksWrong } }),
+        db.mock.create({ data: { id: mockId, title, subjectId, createdBy: teacher.id, courseSlug: teacher.courseSlug, durationMins, marksCorrect, marksWrong } }),
         db.question.createMany({ data: questionData }),
         db.option.createMany({ data: optionData }),
       ])

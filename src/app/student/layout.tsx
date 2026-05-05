@@ -6,7 +6,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   return (
     <div className="min-h-screen flex flex-col">
-      <StudentNav name={user.name} email={user.email} />
+      <StudentNav name={user.name} email={user.email} courseSlug={user.courseSlug} />
       <main className="flex-1 container py-6">{children}</main>
     </div>
   )

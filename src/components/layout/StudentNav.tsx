@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { cn } from '@/lib/utils'
+import { cn, formatCourseSlug } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -16,9 +16,10 @@ const links = [
 interface Props {
   name: string
   email: string
+  courseSlug: string
 }
 
-export default function StudentNav({ name, email }: Props) {
+export default function StudentNav({ name, email, courseSlug }: Props) {
   const pathname = usePathname()
   const router = useRouter()
 
@@ -32,7 +33,7 @@ export default function StudentNav({ name, email }: Props) {
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
         <div className="mr-4 sm:mr-6 flex items-center gap-2">
-          <span className="font-bold text-primary text-lg">MHT CET</span>
+          <span className="font-bold text-primary text-lg">{formatCourseSlug(courseSlug)}</span>
         </div>
 
         <nav className="flex items-center gap-1 flex-1">

@@ -58,8 +58,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const mock = await db.mock.findUnique({ where: { id: params.id } })
-  if (!mock || mock.createdBy !== teacher.id) {
+  const mock = await db.mock.findFirst({
+    where: { id: params.id, createdBy: teacher.id, courseSlug: teacher.courseSlug },
+  })
+  if (!mock) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -72,8 +74,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   if ('error' in auth) return auth.error
   const { user: teacher } = auth
 
-  const mock = await db.mock.findUnique({ where: { id: params.id } })
-  if (!mock || mock.createdBy !== teacher.id) {
+  const mock = await db.mock.findFirst({
+    where: { id: params.id, createdBy: teacher.id, courseSlug: teacher.courseSlug },
+  })
+  if (!mock) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

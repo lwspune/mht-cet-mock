@@ -8,6 +8,7 @@ import QuestionNavigator from '@/components/exam/QuestionNavigator'
 import ExamTimer from '@/components/exam/ExamTimer'
 import SubmitModal from '@/components/exam/SubmitModal'
 import type { Question, QuestionState } from '@/types'
+import { formatCourseSlug } from '@/lib/utils'
 
 interface ExamData {
   attemptId: string
@@ -16,6 +17,7 @@ interface ExamData {
   questions: Question[]
   savedAnswers: Record<string, string | null>
   savedFlags: Record<string, boolean>
+  courseSlug: string
 }
 
 export default function AttemptPage() {
@@ -85,6 +87,7 @@ export default function AttemptPage() {
           questions: mockData.questions,
           savedAnswers,
           savedFlags,
+          courseSlug: mockData.courseSlug,
         })
 
         setAnswers(savedAnswers)
@@ -208,7 +211,7 @@ export default function AttemptPage() {
       {/* Exam header */}
       <header className="border-b bg-background px-4 py-2 flex items-center justify-between gap-4 sticky top-0 z-30">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="font-bold text-primary flex-shrink-0">MHT CET</span>
+          <span className="font-bold text-primary flex-shrink-0">{formatCourseSlug(data.courseSlug)}</span>
           <span className="text-sm text-muted-foreground truncate hidden sm:block">
             Q {currentIdx + 1} of {questions.length}
           </span>

@@ -15,10 +15,14 @@ const SUBJECT_COLORS: Record<string, string> = {
 export default async function MocksPage() {
   const user = await requireRole('STUDENT')
 
-  const [subjects, mocks, attempts] = await Promise.all([
-    db.subject.findMany({ orderBy: { name: 'asc' } }),
+  const [configs, mocks, attempts] = await Promise.all([
+    db.courseSubjectConfig.findMany({
+      where: { course: { slug: user.courseSlug } },
+      include: { subject: true },
+      orderBy: { subject: { name: 'asc' } },
+    }),
     db.mock.findMany({
-      where: { isPublished: true },
+      where: { isPublished: true, courseSlug: user.courseSlug },
       include: {
         subject: true,
         _count: { select: { questions: true } },
@@ -30,6 +34,7 @@ export default async function MocksPage() {
       select: { mockId: true, status: true, score: true, maxScore: true },
     }),
   ])
+  const subjects = configs.map((c) => c.subject)
 
   const attemptMap = new Map(attempts.map((a) => [a.mockId, a]))
 

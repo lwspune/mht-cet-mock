@@ -14,8 +14,8 @@ import KatexRenderer from '@/components/math/KatexRenderer'
 export default async function EditMockPage({ params }: { params: { id: string } }) {
   const teacher = await requireRole('TEACHER')
 
-  const mock = await db.mock.findUnique({
-    where: { id: params.id, createdBy: teacher.id },
+  const mock = await db.mock.findFirst({
+    where: { id: params.id, createdBy: teacher.id, courseSlug: teacher.courseSlug },
     include: {
       subject: true,
       questions: {
@@ -28,12 +28,19 @@ export default async function EditMockPage({ params }: { params: { id: string } 
 
   if (!mock) notFound()
 
+  const configs = await db.courseSubjectConfig.findMany({
+    where: { course: { slug: teacher.courseSlug } },
+    include: { subject: true },
+    orderBy: { subject: { name: 'asc' } },
+  })
+  const subjects = configs.map((c) => c.subject)
+  const subjectIds = configs.map((c) => c.subjectId)
+
   const chapters = await db.chapter.findMany({
+    where: { subjectId: { in: subjectIds } },
     include: { subject: true },
     orderBy: [{ subject: { name: 'asc' } }, { orderIndex: 'asc' }],
   })
-
-  const subjects = await db.subject.findMany({ orderBy: { name: 'asc' } })
 
   return (
     <div className="space-y-8 max-w-3xl">

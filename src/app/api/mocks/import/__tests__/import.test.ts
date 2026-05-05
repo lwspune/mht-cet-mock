@@ -6,7 +6,7 @@ import type { ImportRequest, ImportResponse } from '@/lib/import-types'
 
 vi.mock('@/lib/auth', () => ({
   apiRequireRole: vi.fn().mockResolvedValue({
-    user: { id: 'test-teacher-id', role: 'TEACHER' },
+    user: { id: 'test-teacher-id', role: 'TEACHER', courseSlug: 'mht-cet' },
   }),
 }))
 
@@ -30,11 +30,11 @@ vi.mock('@/lib/db', () => ({
         { id: 'ch-mag-mat', name: 'Magnetic Materials', subjectId: 'subj-physics', subject: { name: 'Physics' } },
       ]),
     },
-    subject: {
+    courseSubjectConfig: {
       findMany: vi.fn().mockResolvedValue([
-        { id: 'subj-physics', name: 'Physics' },
-        { id: 'subj-chemistry', name: 'Chemistry' },
-        { id: 'subj-maths', name: 'Maths' },
+        { subjectId: 'subj-physics', subject: { name: 'Physics' } },
+        { subjectId: 'subj-chemistry', subject: { name: 'Chemistry' } },
+        { subjectId: 'subj-maths', subject: { name: 'Maths' } },
       ]),
     },
     mock: {
@@ -123,7 +123,7 @@ describe('POST /api/mocks/import', () => {
     const body = makeBody({ mocks: [{ title: 'Biology Mock', subjectKey: 'Biology', questions: [makeQuestion()] }] })
     const res = await POST(postRequest(body))
     expect(res.status).toBe(400)
-    expect((await res.json()).error).toMatch(/unknown subject/i)
+    expect((await res.json()).error).toMatch(/not found in course/i)
   })
 
   it('returns 400 when mocks array is empty', async () => {
@@ -351,5 +351,23 @@ describe('POST /api/mocks/import', () => {
       'Test — Chemistry',
       'Test — Maths',
     ])
+  })
+
+  it('returns 400 when teacher course has no matching subject (NDA teacher importing Physics)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { apiRequireRole } = (await import('@/lib/auth')) as any
+    apiRequireRole.mockResolvedValueOnce({ user: { id: 'nda-teacher-id', role: 'TEACHER', courseSlug: 'nda' } })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { db } = (await import('@/lib/db')) as any
+    db.courseSubjectConfig.findMany.mockResolvedValueOnce([])
+    const res = await POST(postRequest(makeBody()))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/not found in course/i)
+  })
+
+  it('writes courseSlug from teacher onto committed mock', async () => {
+    await POST(postRequest(makeBody()))
+    const mock = createdMocks[0] as Record<string, unknown>
+    expect(mock.courseSlug).toBe('mht-cet')
   })
 })

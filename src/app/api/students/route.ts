@@ -15,6 +15,11 @@ export async function GET() {
   if ('error' in auth) return auth.error
   const { user: teacher } = auth
 
+  await db.user.updateMany({
+    where: { createdBy: teacher.id, role: 'STUDENT', NOT: { courseSlug: teacher.courseSlug } },
+    data: { courseSlug: teacher.courseSlug },
+  })
+
   const students = await db.user.findMany({
     where: { createdBy: teacher.id, role: 'STUDENT' },
     select: {
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const student = await db.user.create({
-      data: { id: authData.user.id, email, name, role: 'STUDENT', createdBy: teacher.id },
+      data: { id: authData.user.id, email, name, role: 'STUDENT', createdBy: teacher.id, courseSlug: teacher.courseSlug },
     })
     return NextResponse.json(student, { status: 201 })
   } catch {

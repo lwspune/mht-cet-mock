@@ -104,7 +104,7 @@ export default function ProjectedScoreCard({ data }: Props) {
       </div>
 
       <p className="text-[10px] text-muted-foreground">
-        Based on your accuracy per chapter × MHT CET weightage. Edit weightages in Dashboard → Frequency Table.
+        Based on your accuracy per chapter × this exam's weightage. Edit weightages in Dashboard → Frequency Table.
       </p>
     </div>
   )

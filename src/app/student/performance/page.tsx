@@ -10,17 +10,17 @@ import PerformanceTabs from './PerformanceTabs'
 
 export default async function StudentPerformancePage() {
   const user = await requireRole('STUDENT')
-  return <PerformanceDashboard studentId={user.id} />
+  return <PerformanceDashboard studentId={user.id} courseSlug={user.courseSlug} />
 }
 
-async function PerformanceDashboard({ studentId }: { studentId: string }) {
+async function PerformanceDashboard({ studentId, courseSlug }: { studentId: string; courseSlug: string }) {
   const [examPerf, chapterPerf, wrongAnswers, unattempted, projectedScores, recentScores] = await Promise.all([
     getExamPerformance(studentId),
     getChapterPerformance(studentId),
     getWrongAnswers(studentId),
     getUnattemptedQuestions(studentId),
-    getProjectedScores(studentId),
-    getProjectedScores(studentId, 'mht-cet', 'recent', 3),
+    getProjectedScores(studentId, courseSlug),
+    getProjectedScores(studentId, courseSlug, 'recent', 3),
   ])
 
   return (

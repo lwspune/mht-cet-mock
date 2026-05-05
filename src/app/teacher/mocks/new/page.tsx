@@ -4,9 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import MockForm from '@/components/teacher/MockForm'
 
 export default async function NewMockPage() {
-  await requireRole('TEACHER')
+  const teacher = await requireRole('TEACHER')
 
-  const subjects = await db.subject.findMany({ orderBy: { name: 'asc' } })
+  const configs = await db.courseSubjectConfig.findMany({
+    where: { course: { slug: teacher.courseSlug } },
+    include: { subject: true },
+    orderBy: { subject: { name: 'asc' } },
+  })
+  const subjects = configs.map((c) => c.subject)
 
   return (
     <div className="max-w-xl">
