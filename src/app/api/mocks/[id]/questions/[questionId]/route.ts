@@ -61,7 +61,6 @@ export async function PATCH(
   const contentHash = computeContentHashFromOptions({ text, options })
 
   let resolvedSubtopicId: string | null = subtopicId ?? null
-  let resolvedSubtopicName: string | null = null
   if (newSubtopicName) {
     const created = await db.subtopic.upsert({
       where: { chapterId_name: { chapterId, name: newSubtopicName } },
@@ -69,7 +68,6 @@ export async function PATCH(
       create: { chapterId, name: newSubtopicName },
     })
     resolvedSubtopicId = created.id
-    resolvedSubtopicName = created.name
   }
 
   const rescoredAttempts = await db.$transaction(async (tx) => {
@@ -83,7 +81,6 @@ export async function PATCH(
         pyqYear: pyqYear ?? null,
         difficulty,
         subtopicId: resolvedSubtopicId,
-        subtopicName: resolvedSubtopicName,
         contentHash,
         marks,
         negMarks,

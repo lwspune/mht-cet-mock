@@ -67,7 +67,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   let subtopicId: string | null = parsed.data.subtopicId ?? null
-  let subtopicName: string | null = null
   if (parsed.data.newSubtopicName) {
     const created = await db.subtopic.upsert({
       where: { chapterId_name: { chapterId: parsed.data.chapterId, name: parsed.data.newSubtopicName } },
@@ -75,7 +74,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       create: { chapterId: parsed.data.chapterId, name: parsed.data.newSubtopicName },
     })
     subtopicId = created.id
-    subtopicName = created.name
   }
 
   const count = await db.question.count({ where: { mockId: params.id } })
@@ -94,7 +92,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       pyqYear: parsed.data.pyqYear ?? null,
       difficulty: parsed.data.difficulty,
       subtopicId,
-      subtopicName,
       contentHash,
       marks: parsed.data.marks,
       negMarks: parsed.data.negMarks,

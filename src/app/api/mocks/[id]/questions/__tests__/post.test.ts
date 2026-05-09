@@ -124,7 +124,7 @@ describe('POST /api/mocks/[id]/questions', () => {
     )
     expect(dbMock.question.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ subtopicId: 'st-new', subtopicName: 'Brand New Subtopic' }),
+        data: expect.objectContaining({ subtopicId: 'st-new' }),
       })
     )
   })

@@ -255,18 +255,6 @@ describe('POST /api/mocks/import', () => {
     expect(q.solution).toBe('Self-inductance formula derivation.')
   })
 
-  it('stores subtopicName on the question', async () => {
-    await POST(postRequest(makeBody()))
-    const q = createdQuestions[0] as Record<string, unknown>
-    expect(q.subtopicName).toBe('Self Inductance')
-  })
-
-  it('stores null subtopicName when omitted', async () => {
-    await POST(postRequest(makeBody({ mocks: [{ title: 'Test — Physics', subjectKey: 'Physics', questions: [makeQuestion({ subtopicName: null })] }] })))
-    const q = createdQuestions[0] as Record<string, unknown>
-    expect(q.subtopicName).toBeNull()
-  })
-
   it('stores pyqYear on the question', async () => {
     await POST(postRequest(makeBody()))
     const q = createdQuestions[0] as Record<string, unknown>
@@ -281,8 +269,7 @@ describe('POST /api/mocks/import', () => {
 
   it('upserts a Subtopic row and links the question via subtopicId', async () => {
     await POST(postRequest(makeBody()))
-    const q = createdQuestions[0] as { subtopicId: string | null; subtopicName: string | null }
-    expect(q.subtopicName).toBe('Self Inductance')
+    const q = createdQuestions[0] as { subtopicId: string | null }
     expect(q.subtopicId).toBe('st-Self Inductance')
   })
 

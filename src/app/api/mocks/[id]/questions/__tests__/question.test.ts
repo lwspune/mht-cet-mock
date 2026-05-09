@@ -228,7 +228,7 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
     )
     expect(dbMock.question.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ subtopicId: 'st-new', subtopicName: 'Fresh Subtopic' }),
+        data: expect.objectContaining({ subtopicId: 'st-new' }),
       })
     )
   })
@@ -242,7 +242,7 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
     await PATCH(patchRequest(makePayload()), routeParams)
     expect(dbMock.question.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ subtopicId: null, subtopicName: null }),
+        data: expect.objectContaining({ subtopicId: null }),
       })
     )
   })
