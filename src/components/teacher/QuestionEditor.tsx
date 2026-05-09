@@ -42,20 +42,29 @@ export interface ExistingQuestion {
   solution?: string | null
   pyqYear?: string | null
   difficulty?: 'EASY' | 'MODERATE' | 'HARD'
+  subtopicId?: string | null
+  subtopicName?: string | null
   marks: number
   negMarks: number
   options: { id: string; text: string; imageUrl?: string | null; isCorrect: boolean }[]
 }
 
+export interface SubtopicOption {
+  id: string
+  chapterId: string
+  name: string
+}
+
 interface Props {
   mockId: string
   chapters: { id: string; name: string; subject: { name: string } }[]
+  subtopics: SubtopicOption[]
   onCancel?: () => void
   onSaved?: () => void
   question?: ExistingQuestion
 }
 
-export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, question }: Props) {
+export default function QuestionEditor({ mockId, chapters, subtopics, onCancel, onSaved, question }: Props) {
   const editMode = !!question
   const existingCorrectIdx = question
     ? Math.max(0, question.options.findIndex((o) => o.isCorrect))
@@ -74,6 +83,8 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
   )
   const [correctIndex, setCorrectIndex] = useState(existingCorrectIdx)
   const [difficulty, setDifficulty] = useState<'EASY' | 'MODERATE' | 'HARD'>(question?.difficulty ?? 'MODERATE')
+  const [chapterId, setChapterId] = useState(question?.chapterId ?? '')
+  const [subtopicValue, setSubtopicValue] = useState(question?.subtopicName ?? '')
 
   const emptyOptions: FormValues['options'] = [{ text: '' }, { text: '' }, { text: '' }, { text: '' }]
   const editOptions: FormValues['options'] | undefined = question
@@ -116,6 +127,17 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
   const onSubmit = async (values: FormValues) => {
     setLoading(true)
     try {
+      const trimmedSubtopic = subtopicValue.trim()
+      const matchedSubtopic = trimmedSubtopic
+        ? subtopics.find((s) => s.chapterId === values.chapterId && s.name === trimmedSubtopic)
+        : null
+      const subtopicPayload: { subtopicId?: string | null; newSubtopicName?: string } =
+        !trimmedSubtopic
+          ? { subtopicId: null }
+          : matchedSubtopic
+            ? { subtopicId: matchedSubtopic.id }
+            : { newSubtopicName: trimmedSubtopic }
+
       if (editMode && question) {
         const payload = {
           chapterId: values.chapterId,
@@ -124,6 +146,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
           solution: values.solution || undefined,
           pyqYear: values.pyqYear || null,
           difficulty: values.difficulty,
+          ...subtopicPayload,
           marks: values.marks,
           negMarks: values.negMarks,
           options: question.options.map((opt, i) => ({
@@ -150,6 +173,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
           solution: values.solution || undefined,
           pyqYear: values.pyqYear || undefined,
           difficulty: values.difficulty,
+          ...subtopicPayload,
           marks: values.marks,
           negMarks: values.negMarks,
           options: values.options.map((opt, i) => ({
@@ -191,7 +215,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
       {/* Chapter selector */}
       <div className="space-y-1.5">
         <Label>Chapter</Label>
-        <Select defaultValue={question?.chapterId} onValueChange={(v) => setValue('chapterId', v)}>
+        <Select defaultValue={question?.chapterId} onValueChange={(v) => { setValue('chapterId', v); setChapterId(v); setSubtopicValue('') }}>
           <SelectTrigger>
             <SelectValue placeholder="Select chapter" />
           </SelectTrigger>
@@ -302,6 +326,32 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
             )}
           </div>
         ))}
+      </div>
+
+      {/* Subtopic combobox */}
+      <div className="space-y-1.5">
+        <Label htmlFor="subtopic-input">
+          Subtopic{' '}
+          <span className="text-muted-foreground font-normal text-xs">(optional — pick or type a new one)</span>
+        </Label>
+        <input
+          id="subtopic-input"
+          list="subtopic-options"
+          type="text"
+          autoComplete="off"
+          placeholder={chapterId ? 'Type or select a subtopic' : 'Pick a chapter first'}
+          disabled={!chapterId}
+          value={subtopicValue}
+          onChange={(e) => setSubtopicValue(e.target.value)}
+          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+        <datalist id="subtopic-options">
+          {subtopics
+            .filter((s) => s.chapterId === chapterId)
+            .map((s) => (
+              <option key={s.id} value={s.name} />
+            ))}
+        </datalist>
       </div>
 
       {/* Difficulty */}

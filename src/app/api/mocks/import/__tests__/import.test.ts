@@ -55,6 +55,12 @@ vi.mock('@/lib/db', () => ({
         return Promise.resolve({ count: data.length })
       }),
     },
+    subtopic: {
+      findMany: vi.fn().mockResolvedValue([]),
+      upsert: vi.fn().mockImplementation(({ create }: { create: { chapterId: string; name: string } }) =>
+        Promise.resolve({ id: `st-${create.name}`, chapterId: create.chapterId, name: create.name })
+      ),
+    },
     $transaction: mockTransaction,
   },
 }))
@@ -271,6 +277,19 @@ describe('POST /api/mocks/import', () => {
     await POST(postRequest(makeBody({ mocks: [{ title: 'Test — Physics', subjectKey: 'Physics', questions: [makeQuestion({ pyqYear: null })] }] })))
     const q = createdQuestions[0] as Record<string, unknown>
     expect(q.pyqYear).toBeNull()
+  })
+
+  it('upserts a Subtopic row and links the question via subtopicId', async () => {
+    await POST(postRequest(makeBody()))
+    const q = createdQuestions[0] as { subtopicId: string | null; subtopicName: string | null }
+    expect(q.subtopicName).toBe('Self Inductance')
+    expect(q.subtopicId).toBe('st-Self Inductance')
+  })
+
+  it('persists null subtopicId when subtopicName is null', async () => {
+    await POST(postRequest(makeBody({ mocks: [{ title: 'Test — Physics', subjectKey: 'Physics', questions: [makeQuestion({ subtopicName: null })] }] })))
+    const q = createdQuestions[0] as { subtopicId: string | null }
+    expect(q.subtopicId).toBeNull()
   })
 
   it('stores a contentHash on every imported question', async () => {

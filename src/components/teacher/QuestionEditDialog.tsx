@@ -12,15 +12,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import QuestionEditor, { type ExistingQuestion } from './QuestionEditor'
+import QuestionEditor, { type ExistingQuestion, type SubtopicOption } from './QuestionEditor'
 
 interface Props {
   mockId: string
   chapters: { id: string; name: string; subject: { name: string } }[]
+  subtopics: SubtopicOption[]
   question: ExistingQuestion
 }
 
-export default function QuestionEditDialog({ mockId, chapters, question }: Props) {
+export default function QuestionEditDialog({ mockId, chapters, subtopics, question }: Props) {
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -60,6 +61,7 @@ export default function QuestionEditDialog({ mockId, chapters, question }: Props
         <QuestionEditor
           mockId={mockId}
           chapters={chapters}
+          subtopics={subtopics}
           question={question}
           onCancel={() => setOpen(false)}
           onSaved={() => setOpen(false)}

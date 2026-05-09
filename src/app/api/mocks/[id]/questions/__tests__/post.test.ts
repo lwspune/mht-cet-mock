@@ -17,6 +17,11 @@ const dbMock = {
       Promise.resolve({ id: 'q-new', ...data, options: [], chapter: { id: 'ch-1' } })
     ),
   },
+  subtopic: {
+    upsert: vi.fn().mockImplementation(({ create }: { create: { chapterId: string; name: string } }) =>
+      Promise.resolve({ id: 'st-new', chapterId: create.chapterId, name: create.name })
+    ),
+  },
 }
 
 vi.mock('@/lib/db', () => ({ db: dbMock }))
@@ -57,6 +62,7 @@ describe('POST /api/mocks/[id]/questions', () => {
 
   beforeEach(() => {
     dbMock.question.create.mockClear()
+    dbMock.subtopic.upsert.mockClear()
   })
 
   it('returns 201 for a valid create', async () => {
@@ -96,6 +102,45 @@ describe('POST /api/mocks/[id]/questions', () => {
   it('returns 400 when options array is wrong length', async () => {
     const res = await POST(postRequest(makePayload({ options: [{ text: 'A', isCorrect: true }] })), routeParams)
     expect(res.status).toBe(400)
+  })
+
+  it('persists subtopicId when provided directly', async () => {
+    await POST(postRequest(makePayload({ subtopicId: 'st-existing' })), routeParams)
+    expect(dbMock.question.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subtopicId: 'st-existing' }),
+      })
+    )
+    expect(dbMock.subtopic.upsert).not.toHaveBeenCalled()
+  })
+
+  it('upserts a Subtopic and persists its id when newSubtopicName is provided', async () => {
+    await POST(postRequest(makePayload({ newSubtopicName: 'Brand New Subtopic' })), routeParams)
+    expect(dbMock.subtopic.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { chapterId_name: { chapterId: 'ch-1', name: 'Brand New Subtopic' } },
+        create: { chapterId: 'ch-1', name: 'Brand New Subtopic' },
+      })
+    )
+    expect(dbMock.question.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subtopicId: 'st-new', subtopicName: 'Brand New Subtopic' }),
+      })
+    )
+  })
+
+  it('returns 400 when both subtopicId and newSubtopicName are provided', async () => {
+    const res = await POST(postRequest(makePayload({ subtopicId: 'st-1', newSubtopicName: 'Other' })), routeParams)
+    expect(res.status).toBe(400)
+  })
+
+  it('persists null subtopicId when neither subtopic field is provided', async () => {
+    await POST(postRequest(makePayload()), routeParams)
+    expect(dbMock.question.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subtopicId: null }),
+      })
+    )
   })
 
   it('persists a contentHash computed from text and options', async () => {

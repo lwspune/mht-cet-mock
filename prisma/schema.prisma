@@ -60,9 +60,23 @@ model Chapter {
   subject     Subject            @relation(fields: [subjectId], references: [id])
   questions   Question[]
   frequencies ChapterFrequency[]
+  subtopics   Subtopic[]
 
   @@unique([subjectId, orderIndex])
   @@map("chapters")
+}
+
+model Subtopic {
+  id        String   @id @default(cuid())
+  chapterId String
+  name      String
+  createdAt DateTime @default(now())
+
+  chapter   Chapter    @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@unique([chapterId, name])
+  @@map("subtopics")
 }
 
 model Course {
@@ -141,6 +155,8 @@ model Question {
   answers AttemptAnswer[]
   solution     String?
   subtopicName String?
+  subtopicId   String?
+  subtopic     Subtopic?  @relation(fields: [subtopicId], references: [id], onDelete: SetNull)
   pyqYear      String?  // e.g. "2021"; null means not a PYQ question
   difficulty   Difficulty @default(MODERATE)
   contentHash  String   // sha256 over normalised text/options/correct label

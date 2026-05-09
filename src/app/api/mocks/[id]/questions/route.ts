@@ -17,6 +17,8 @@ const createSchema = z.object({
   solution: z.string().optional(),
   pyqYear: z.string().optional(),
   difficulty: z.enum(['EASY', 'MODERATE', 'HARD']).default('MODERATE'),
+  subtopicId: z.string().optional(),
+  newSubtopicName: z.string().min(1).optional(),
   marks: z.number().default(2),
   negMarks: z.number().default(0),
   options: z.array(optionSchema).length(4),
@@ -57,6 +59,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
   }
 
+  if (parsed.data.subtopicId && parsed.data.newSubtopicName) {
+    return NextResponse.json(
+      { error: 'Provide either subtopicId or newSubtopicName, not both' },
+      { status: 400 }
+    )
+  }
+
+  let subtopicId: string | null = parsed.data.subtopicId ?? null
+  let subtopicName: string | null = null
+  if (parsed.data.newSubtopicName) {
+    const created = await db.subtopic.upsert({
+      where: { chapterId_name: { chapterId: parsed.data.chapterId, name: parsed.data.newSubtopicName } },
+      update: {},
+      create: { chapterId: parsed.data.chapterId, name: parsed.data.newSubtopicName },
+    })
+    subtopicId = created.id
+    subtopicName = created.name
+  }
+
   const count = await db.question.count({ where: { mockId: params.id } })
   const contentHash = computeContentHashFromOptions({
     text: parsed.data.text,
@@ -72,6 +93,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       solution: parsed.data.solution ?? null,
       pyqYear: parsed.data.pyqYear ?? null,
       difficulty: parsed.data.difficulty,
+      subtopicId,
+      subtopicName,
       contentHash,
       marks: parsed.data.marks,
       negMarks: parsed.data.negMarks,

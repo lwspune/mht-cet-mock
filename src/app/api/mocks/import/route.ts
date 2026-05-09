@@ -59,6 +59,27 @@ export async function POST(request: NextRequest) {
     chapterMap.set(`${ch.subject.name}|${ch.name}`, ch.id)
   }
 
+  // Pre-load all subtopics so we can map (chapterId, subtopicName) → subtopicId
+  // without a per-question lookup. New (chapter, subtopic) pairs get upserted below.
+  const subtopicCache = new Map<string, string>() // `${chapterId}|${name}` → subtopicId
+  const allSubtopics = await db.subtopic.findMany()
+  for (const st of allSubtopics) {
+    subtopicCache.set(`${st.chapterId}|${st.name}`, st.id)
+  }
+  async function resolveSubtopicId(chapterId: string, name: string | null): Promise<string | null> {
+    if (!name) return null
+    const key = `${chapterId}|${name}`
+    const cached = subtopicCache.get(key)
+    if (cached) return cached
+    const created = await db.subtopic.upsert({
+      where: { chapterId_name: { chapterId, name } },
+      update: {},
+      create: { chapterId, name },
+    })
+    subtopicCache.set(key, created.id)
+    return created.id
+  }
+
   const courseConfigs = await db.courseSubjectConfig.findMany({
     where: { course: { slug: teacher.courseSlug } },
     include: { subject: true },
@@ -110,22 +131,25 @@ export async function POST(request: NextRequest) {
     for (const { title, subjectId, resolved } of validatedMocks) {
       const mockId = randomUUID()
 
-      const questionData = resolved.map((q, i) => ({
-        id: randomUUID(),
-        mockId,
-        chapterId: q.chapterId,
-        text: q.text,
-        marks: marksCorrect,
-        negMarks: marksWrong,
-        orderIndex: i + 1,
-        solution: q.solution,
-        subtopicName: q.subtopicName,
-        pyqYear: q.pyqYear,
-        contentHash: computeContentHashFromOptions({
+      const questionData = await Promise.all(
+        resolved.map(async (q, i) => ({
+          id: randomUUID(),
+          mockId,
+          chapterId: q.chapterId,
           text: q.text,
-          options: q.options.map((text, idx) => ({ text, isCorrect: idx === q.correctIndex })),
-        }),
-      }))
+          marks: marksCorrect,
+          negMarks: marksWrong,
+          orderIndex: i + 1,
+          solution: q.solution,
+          subtopicName: q.subtopicName,
+          subtopicId: await resolveSubtopicId(q.chapterId, q.subtopicName),
+          pyqYear: q.pyqYear,
+          contentHash: computeContentHashFromOptions({
+            text: q.text,
+            options: q.options.map((text, idx) => ({ text, isCorrect: idx === q.correctIndex })),
+          }),
+        }))
+      )
 
       const optionData = resolved.flatMap((q, i) =>
         q.options.map((optText, idx) => ({
