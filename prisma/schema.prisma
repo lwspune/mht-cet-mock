@@ -154,7 +154,6 @@ model Question {
   options Option[]
   answers AttemptAnswer[]
   solution     String?
-  subtopicName String?
   subtopicId   String?
   subtopic     Subtopic?  @relation(fields: [subtopicId], references: [id], onDelete: SetNull)
   pyqYear      String?  // e.g. "2021"; null means not a PYQ question

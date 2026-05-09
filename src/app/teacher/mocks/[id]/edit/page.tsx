@@ -19,7 +19,7 @@ export default async function EditMockPage({ params }: { params: { id: string } 
     include: {
       subject: true,
       questions: {
-        include: { options: true, chapter: { include: { subject: true } } },
+        include: { options: true, chapter: { include: { subject: true } }, subtopic: true },
         orderBy: { orderIndex: 'asc' },
       },
       _count: { select: { attempts: true } },
@@ -130,7 +130,7 @@ export default async function EditMockPage({ params }: { params: { id: string } 
                       pyqYear: q.pyqYear,
                       difficulty: q.difficulty,
                       subtopicId: q.subtopicId,
-                      subtopicName: q.subtopicName,
+                      subtopicName: q.subtopic?.name ?? null,
                       marks: q.marks,
                       negMarks: q.negMarks,
                       options: q.options.map((o) => ({

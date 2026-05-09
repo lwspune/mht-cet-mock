@@ -141,7 +141,6 @@ export async function POST(request: NextRequest) {
           negMarks: marksWrong,
           orderIndex: i + 1,
           solution: q.solution,
-          subtopicName: q.subtopicName,
           subtopicId: await resolveSubtopicId(q.chapterId, q.subtopicName),
           pyqYear: q.pyqYear,
           contentHash: computeContentHashFromOptions({
