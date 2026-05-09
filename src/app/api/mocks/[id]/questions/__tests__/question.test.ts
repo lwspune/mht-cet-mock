@@ -203,6 +203,18 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
     expect(res.status).toBe(400)
   })
 
+  it('recomputes contentHash and passes it to db.question.update', async () => {
+    const { computeContentHashFromOptions } = await import('@/lib/questions/hash')
+    const payload = makePayload()
+    const expected = computeContentHashFromOptions({ text: payload.text, options: payload.options })
+    await PATCH(patchRequest(payload), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ contentHash: expected }),
+      })
+    )
+  })
+
   it('returns rescoredAttempts count in response', async () => {
     dbMock.mockAttempt.findMany.mockResolvedValueOnce([
       {

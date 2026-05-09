@@ -273,6 +273,19 @@ describe('POST /api/mocks/import', () => {
     expect(q.pyqYear).toBeNull()
   })
 
+  it('stores a contentHash on every imported question', async () => {
+    const { computeContentHashFromOptions } = await import('@/lib/questions/hash')
+    await POST(postRequest(makeBody()))
+    const q = createdQuestions[0] as { text: string; contentHash: string }
+    const fixture = makeQuestion()
+    const expected = computeContentHashFromOptions({
+      text: fixture.text,
+      options: fixture.options.map((text, idx) => ({ text, isCorrect: idx === fixture.correctIndex })),
+    })
+    expect(q.contentHash).toBe(expected)
+    expect(q.contentHash).toMatch(/^[0-9a-f]{64}$/)
+  })
+
   it('assigns sequential orderIndex starting at 1', async () => {
     const twoQuestions = makeBody({
       mocks: [{
