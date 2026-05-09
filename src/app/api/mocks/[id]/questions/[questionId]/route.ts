@@ -17,6 +17,7 @@ const updateSchema = z.object({
   imageUrl: z.string().optional(),
   solution: z.string().optional(),
   pyqYear: z.string().nullable().optional(),
+  difficulty: z.enum(['EASY', 'MODERATE', 'HARD']).default('MODERATE'),
   marks: z.number(),
   negMarks: z.number(),
   options: z.array(optionUpdateSchema).length(4),
@@ -47,12 +48,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { chapterId, text, imageUrl, solution, pyqYear, marks, negMarks, options } = parsed.data
+  const { chapterId, text, imageUrl, solution, pyqYear, difficulty, marks, negMarks, options } = parsed.data
 
   const rescoredAttempts = await db.$transaction(async (tx) => {
     await tx.question.update({
       where: { id: params.questionId },
-      data: { chapterId, text, imageUrl: imageUrl ?? null, solution: solution ?? null, pyqYear: pyqYear ?? null, marks, negMarks },
+      data: { chapterId, text, imageUrl: imageUrl ?? null, solution: solution ?? null, pyqYear: pyqYear ?? null, difficulty, marks, negMarks },
     })
     await Promise.all(
       options.map((opt) =>

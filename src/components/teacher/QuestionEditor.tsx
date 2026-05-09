@@ -25,6 +25,7 @@ const schema = z.object({
   imageUrl: z.string().optional(),
   solution: z.string().optional(),
   pyqYear: z.string().optional(),
+  difficulty: z.enum(['EASY', 'MODERATE', 'HARD']).default('MODERATE'),
   options: z.tuple([optionSchema, optionSchema, optionSchema, optionSchema]),
   correctIndex: z.number().min(0).max(3),
   marks: z.coerce.number().default(2),
@@ -40,6 +41,7 @@ export interface ExistingQuestion {
   imageUrl?: string | null
   solution?: string | null
   pyqYear?: string | null
+  difficulty?: 'EASY' | 'MODERATE' | 'HARD'
   marks: number
   negMarks: number
   options: { id: string; text: string; imageUrl?: string | null; isCorrect: boolean }[]
@@ -71,6 +73,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
     question ? question.options.map((o) => o.imageUrl ?? '') : ['', '', '', '']
   )
   const [correctIndex, setCorrectIndex] = useState(existingCorrectIdx)
+  const [difficulty, setDifficulty] = useState<'EASY' | 'MODERATE' | 'HARD'>(question?.difficulty ?? 'MODERATE')
 
   const emptyOptions: FormValues['options'] = [{ text: '' }, { text: '' }, { text: '' }, { text: '' }]
   const editOptions: FormValues['options'] | undefined = question
@@ -85,6 +88,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
       imageUrl: question?.imageUrl ?? '',
       solution: question?.solution ?? '',
       pyqYear: question?.pyqYear ?? '',
+      difficulty: question?.difficulty ?? 'MODERATE',
       marks: question?.marks ?? 2,
       negMarks: question?.negMarks ?? 0,
       correctIndex: existingCorrectIdx,
@@ -119,6 +123,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
           imageUrl: values.imageUrl || undefined,
           solution: values.solution || undefined,
           pyqYear: values.pyqYear || null,
+          difficulty: values.difficulty,
           marks: values.marks,
           negMarks: values.negMarks,
           options: question.options.map((opt, i) => ({
@@ -144,6 +149,7 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
           imageUrl: values.imageUrl,
           solution: values.solution || undefined,
           pyqYear: values.pyqYear || undefined,
+          difficulty: values.difficulty,
           marks: values.marks,
           negMarks: values.negMarks,
           options: values.options.map((opt, i) => ({
@@ -296,6 +302,29 @@ export default function QuestionEditor({ mockId, chapters, onCancel, onSaved, qu
             )}
           </div>
         ))}
+      </div>
+
+      {/* Difficulty */}
+      <div className="space-y-1.5">
+        <Label>Difficulty</Label>
+        <div role="radiogroup" aria-label="Difficulty" className="inline-flex rounded-md border border-input bg-background p-0.5">
+          {(['EASY', 'MODERATE', 'HARD'] as const).map((level) => (
+            <button
+              key={level}
+              type="button"
+              role="radio"
+              aria-checked={difficulty === level}
+              onClick={() => { setDifficulty(level); setValue('difficulty', level) }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-sm min-h-[44px] sm:min-h-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors ${
+                difficulty === level
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {level.charAt(0) + level.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* PYQ Year */}

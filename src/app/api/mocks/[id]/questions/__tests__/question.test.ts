@@ -180,6 +180,29 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
     )
   })
 
+  it('passes difficulty to db.question.update when provided', async () => {
+    await PATCH(patchRequest(makePayload({ difficulty: 'HARD' })), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ difficulty: 'HARD' }),
+      })
+    )
+  })
+
+  it('defaults difficulty to MODERATE when omitted', async () => {
+    await PATCH(patchRequest(makePayload()), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ difficulty: 'MODERATE' }),
+      })
+    )
+  })
+
+  it('returns 400 when difficulty is not a valid enum value', async () => {
+    const res = await PATCH(patchRequest(makePayload({ difficulty: 'INSANE' })), routeParams)
+    expect(res.status).toBe(400)
+  })
+
   it('returns rescoredAttempts count in response', async () => {
     dbMock.mockAttempt.findMany.mockResolvedValueOnce([
       {
