@@ -12,6 +12,7 @@ CREATE TABLE "users" (
     "role" "Role" NOT NULL DEFAULT 'STUDENT',
     "createdBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "courseSlug" TEXT NOT NULL DEFAULT 'mht-cet',
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
@@ -35,15 +36,49 @@ CREATE TABLE "chapters" (
 );
 
 -- CreateTable
+CREATE TABLE "courses" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+
+    CONSTRAINT "courses_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "course_subject_configs" (
+    "id" TEXT NOT NULL,
+    "courseId" TEXT NOT NULL,
+    "subjectId" TEXT NOT NULL,
+    "maxMarks" INTEGER NOT NULL,
+    "marksPerQ" DOUBLE PRECISION NOT NULL,
+    "negMarkFraction" DOUBLE PRECISION NOT NULL DEFAULT 0.25,
+    "milestones" JSONB NOT NULL DEFAULT '[{"label":"Cutoff","pct":0.30},{"label":"Merit","pct":0.50},{"label":"Rank","pct":0.70}]',
+
+    CONSTRAINT "course_subject_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "chapter_frequencies" (
+    "id" TEXT NOT NULL,
+    "courseId" TEXT NOT NULL,
+    "chapterId" TEXT NOT NULL,
+    "pct" DOUBLE PRECISION NOT NULL,
+
+    CONSTRAINT "chapter_frequencies_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "mocks" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "subjectId" TEXT NOT NULL,
     "createdBy" TEXT NOT NULL,
+    "courseSlug" TEXT NOT NULL DEFAULT 'mht-cet',
     "durationMins" INTEGER NOT NULL DEFAULT 180,
     "marksCorrect" DOUBLE PRECISION NOT NULL DEFAULT 2,
     "marksWrong" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "isPublished" BOOLEAN NOT NULL DEFAULT false,
+    "allowReattempt" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "mocks_pkey" PRIMARY KEY ("id")
@@ -60,6 +95,8 @@ CREATE TABLE "questions" (
     "marks" DOUBLE PRECISION NOT NULL DEFAULT 2,
     "negMarks" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "solution" TEXT,
+    "subtopicName" TEXT,
+    "pyqYear" TEXT,
 
     CONSTRAINT "questions_pkey" PRIMARY KEY ("id")
 );
@@ -106,10 +143,31 @@ CREATE TABLE "attempt_answers" (
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
+CREATE INDEX "users_courseSlug_idx" ON "users"("courseSlug");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "subjects_name_key" ON "subjects"("name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "chapters_subjectId_orderIndex_key" ON "chapters"("subjectId", "orderIndex");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "courses_name_key" ON "courses"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "courses_slug_key" ON "courses"("slug");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "course_subject_configs_courseId_subjectId_key" ON "course_subject_configs"("courseId", "subjectId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "chapter_frequencies_courseId_chapterId_key" ON "chapter_frequencies"("courseId", "chapterId");
+
+-- CreateIndex
+CREATE INDEX "mocks_createdBy_courseSlug_idx" ON "mocks"("createdBy", "courseSlug");
+
+-- CreateIndex
+CREATE INDEX "mocks_isPublished_courseSlug_idx" ON "mocks"("isPublished", "courseSlug");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "mock_attempts_mockId_studentId_key" ON "mock_attempts"("mockId", "studentId");
@@ -122,6 +180,18 @@ ALTER TABLE "users" ADD CONSTRAINT "users_createdBy_fkey" FOREIGN KEY ("createdB
 
 -- AddForeignKey
 ALTER TABLE "chapters" ADD CONSTRAINT "chapters_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "course_subject_configs" ADD CONSTRAINT "course_subject_configs_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "course_subject_configs" ADD CONSTRAINT "course_subject_configs_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "chapter_frequencies" ADD CONSTRAINT "chapter_frequencies_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "courses"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "chapter_frequencies" ADD CONSTRAINT "chapter_frequencies_chapterId_fkey" FOREIGN KEY ("chapterId") REFERENCES "chapters"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "mocks" ADD CONSTRAINT "mocks_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "subjects"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -139,7 +209,7 @@ ALTER TABLE "questions" ADD CONSTRAINT "questions_chapterId_fkey" FOREIGN KEY ("
 ALTER TABLE "options" ADD CONSTRAINT "options_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "questions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "mock_attempts" ADD CONSTRAINT "mock_attempts_mockId_fkey" FOREIGN KEY ("mockId") REFERENCES "mocks"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "mock_attempts" ADD CONSTRAINT "mock_attempts_mockId_fkey" FOREIGN KEY ("mockId") REFERENCES "mocks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "mock_attempts" ADD CONSTRAINT "mock_attempts_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -148,7 +218,8 @@ ALTER TABLE "mock_attempts" ADD CONSTRAINT "mock_attempts_studentId_fkey" FOREIG
 ALTER TABLE "attempt_answers" ADD CONSTRAINT "attempt_answers_attemptId_fkey" FOREIGN KEY ("attemptId") REFERENCES "mock_attempts"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "attempt_answers" ADD CONSTRAINT "attempt_answers_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "questions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "attempt_answers" ADD CONSTRAINT "attempt_answers_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "questions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "attempt_answers" ADD CONSTRAINT "attempt_answers_selectedOptionId_fkey" FOREIGN KEY ("selectedOptionId") REFERENCES "options"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
