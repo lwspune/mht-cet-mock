@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { apiRequireRole } from '@/lib/auth'
 import { rescoreSubmittedAttempts } from '@/lib/scoring'
+import { computeContentHashFromOptions } from '@/lib/questions/hash'
 import { z } from 'zod'
 
 const optionUpdateSchema = z.object({
@@ -49,11 +50,12 @@ export async function PATCH(
   }
 
   const { chapterId, text, imageUrl, solution, pyqYear, difficulty, marks, negMarks, options } = parsed.data
+  const contentHash = computeContentHashFromOptions({ text, options })
 
   const rescoredAttempts = await db.$transaction(async (tx) => {
     await tx.question.update({
       where: { id: params.questionId },
-      data: { chapterId, text, imageUrl: imageUrl ?? null, solution: solution ?? null, pyqYear: pyqYear ?? null, difficulty, marks, negMarks },
+      data: { chapterId, text, imageUrl: imageUrl ?? null, solution: solution ?? null, pyqYear: pyqYear ?? null, difficulty, contentHash, marks, negMarks },
     })
     await Promise.all(
       options.map((opt) =>

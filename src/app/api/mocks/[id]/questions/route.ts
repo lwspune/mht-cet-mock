@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { apiRequireRole } from '@/lib/auth'
+import { computeContentHashFromOptions } from '@/lib/questions/hash'
 import { z } from 'zod'
 
 const optionSchema = z.object({
@@ -57,6 +58,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   const count = await db.question.count({ where: { mockId: params.id } })
+  const contentHash = computeContentHashFromOptions({
+    text: parsed.data.text,
+    options: parsed.data.options,
+  })
 
   const question = await db.question.create({
     data: {
@@ -67,6 +72,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       solution: parsed.data.solution ?? null,
       pyqYear: parsed.data.pyqYear ?? null,
       difficulty: parsed.data.difficulty,
+      contentHash,
       marks: parsed.data.marks,
       negMarks: parsed.data.negMarks,
       orderIndex: count + 1,

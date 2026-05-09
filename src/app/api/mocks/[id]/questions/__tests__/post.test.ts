@@ -97,4 +97,16 @@ describe('POST /api/mocks/[id]/questions', () => {
     const res = await POST(postRequest(makePayload({ options: [{ text: 'A', isCorrect: true }] })), routeParams)
     expect(res.status).toBe(400)
   })
+
+  it('persists a contentHash computed from text and options', async () => {
+    const { computeContentHashFromOptions } = await import('@/lib/questions/hash')
+    const payload = makePayload()
+    const expected = computeContentHashFromOptions({ text: payload.text, options: payload.options })
+    await POST(postRequest(payload), routeParams)
+    expect(dbMock.question.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ contentHash: expected }),
+      })
+    )
+  })
 })

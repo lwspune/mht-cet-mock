@@ -143,6 +143,7 @@ model Question {
   subtopicName String?
   pyqYear      String?  // e.g. "2021"; null means not a PYQ question
   difficulty   Difficulty @default(MODERATE)
+  contentHash  String   // sha256 over normalised text/options/correct label
 
   @@map("questions")
 }

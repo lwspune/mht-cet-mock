@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { apiRequireRole } from '@/lib/auth'
+import { computeContentHashFromOptions } from '@/lib/questions/hash'
 import type { ImportResponse } from '@/lib/import-types'
 
 const questionSchema = z.object({
@@ -120,6 +121,10 @@ export async function POST(request: NextRequest) {
         solution: q.solution,
         subtopicName: q.subtopicName,
         pyqYear: q.pyqYear,
+        contentHash: computeContentHashFromOptions({
+          text: q.text,
+          options: q.options.map((text, idx) => ({ text, isCorrect: idx === q.correctIndex })),
+        }),
       }))
 
       const optionData = resolved.flatMap((q, i) =>
