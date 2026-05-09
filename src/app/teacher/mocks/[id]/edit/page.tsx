@@ -42,6 +42,12 @@ export default async function EditMockPage({ params }: { params: { id: string } 
     orderBy: [{ subject: { name: 'asc' } }, { orderIndex: 'asc' }],
   })
 
+  const subtopics = await db.subtopic.findMany({
+    where: { chapterId: { in: chapters.map((c) => c.id) } },
+    select: { id: true, chapterId: true, name: true },
+    orderBy: { name: 'asc' },
+  })
+
   return (
     <div className="space-y-8 max-w-3xl">
       {/* Header */}
@@ -114,6 +120,7 @@ export default async function EditMockPage({ params }: { params: { id: string } 
                   <QuestionEditDialog
                     mockId={mock.id}
                     chapters={chapters}
+                    subtopics={subtopics}
                     question={{
                       id: q.id,
                       text: q.text,
@@ -122,6 +129,8 @@ export default async function EditMockPage({ params }: { params: { id: string } 
                       solution: q.solution,
                       pyqYear: q.pyqYear,
                       difficulty: q.difficulty,
+                      subtopicId: q.subtopicId,
+                      subtopicName: q.subtopicName,
                       marks: q.marks,
                       negMarks: q.negMarks,
                       options: q.options.map((o) => ({
@@ -146,6 +155,7 @@ export default async function EditMockPage({ params }: { params: { id: string } 
           <QuestionEditor
             mockId={mock.id}
             chapters={chapters}
+            subtopics={subtopics}
           />
         </CardContent>
       </Card>

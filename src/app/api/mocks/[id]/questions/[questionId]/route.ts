@@ -19,6 +19,8 @@ const updateSchema = z.object({
   solution: z.string().optional(),
   pyqYear: z.string().nullable().optional(),
   difficulty: z.enum(['EASY', 'MODERATE', 'HARD']).default('MODERATE'),
+  subtopicId: z.string().nullable().optional(),
+  newSubtopicName: z.string().min(1).optional(),
   marks: z.number(),
   negMarks: z.number(),
   options: z.array(optionUpdateSchema).length(4),
@@ -49,13 +51,43 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { chapterId, text, imageUrl, solution, pyqYear, difficulty, marks, negMarks, options } = parsed.data
+  const { chapterId, text, imageUrl, solution, pyqYear, difficulty, subtopicId, newSubtopicName, marks, negMarks, options } = parsed.data
+  if (subtopicId && newSubtopicName) {
+    return NextResponse.json(
+      { error: 'Provide either subtopicId or newSubtopicName, not both' },
+      { status: 400 }
+    )
+  }
   const contentHash = computeContentHashFromOptions({ text, options })
+
+  let resolvedSubtopicId: string | null = subtopicId ?? null
+  let resolvedSubtopicName: string | null = null
+  if (newSubtopicName) {
+    const created = await db.subtopic.upsert({
+      where: { chapterId_name: { chapterId, name: newSubtopicName } },
+      update: {},
+      create: { chapterId, name: newSubtopicName },
+    })
+    resolvedSubtopicId = created.id
+    resolvedSubtopicName = created.name
+  }
 
   const rescoredAttempts = await db.$transaction(async (tx) => {
     await tx.question.update({
       where: { id: params.questionId },
-      data: { chapterId, text, imageUrl: imageUrl ?? null, solution: solution ?? null, pyqYear: pyqYear ?? null, difficulty, contentHash, marks, negMarks },
+      data: {
+        chapterId,
+        text,
+        imageUrl: imageUrl ?? null,
+        solution: solution ?? null,
+        pyqYear: pyqYear ?? null,
+        difficulty,
+        subtopicId: resolvedSubtopicId,
+        subtopicName: resolvedSubtopicName,
+        contentHash,
+        marks,
+        negMarks,
+      },
     })
     await Promise.all(
       options.map((opt) =>

@@ -96,6 +96,7 @@ export async function getWrongAnswers(studentId: string): Promise<WrongAnswer[]>
       question: {
         include: {
           chapter: { include: { subject: true } },
+          subtopic: true,
           options: true,
         },
       },
@@ -109,7 +110,7 @@ export async function getWrongAnswers(studentId: string): Promise<WrongAnswer[]>
     questionText: a.question.text,
     questionImageUrl: a.question.imageUrl,
     chapterName: a.question.chapter.name,
-    subtopicName: a.question.subtopicName,
+    subtopicName: a.question.subtopic?.name ?? null,
     subjectName: a.question.chapter.subject.name,
     solution: a.question.solution,
     options: a.question.options.map((o) => ({
@@ -329,6 +330,7 @@ export async function getUnattemptedQuestions(studentId: string): Promise<Unatte
       question: {
         include: {
           chapter: { include: { subject: true } },
+          subtopic: true,
           options: true,
         },
       },
@@ -341,7 +343,7 @@ export async function getUnattemptedQuestions(studentId: string): Promise<Unatte
     questionText: a.question.text,
     questionImageUrl: a.question.imageUrl,
     chapterName: a.question.chapter.name,
-    subtopicName: a.question.subtopicName,
+    subtopicName: a.question.subtopic?.name ?? null,
     subjectName: a.question.chapter.subject.name,
     solution: a.question.solution,
     options: a.question.options.map((o) => ({

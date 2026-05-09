@@ -42,6 +42,11 @@ const dbMock = {
       Promise.resolve({ id: where.id, ...data })
     ),
   },
+  subtopic: {
+    upsert: vi.fn().mockImplementation(({ create }: { create: { chapterId: string; name: string } }) =>
+      Promise.resolve({ id: 'st-new', chapterId: create.chapterId, name: create.name })
+    ),
+  },
   mockAttempt: {
     findMany: vi.fn().mockResolvedValue([]),
     update: vi.fn().mockResolvedValue({}),
@@ -102,6 +107,7 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
     dbMock.$transaction.mockClear()
     dbMock.question.update.mockClear()
     dbMock.option.update.mockClear()
+    dbMock.subtopic.upsert.mockClear()
     dbMock.mockAttempt.findMany.mockResolvedValue([])
     dbMock.mockAttempt.update.mockClear()
     dbMock.attemptAnswer.update.mockClear()
@@ -201,6 +207,44 @@ describe('PATCH /api/mocks/[id]/questions/[questionId]', () => {
   it('returns 400 when difficulty is not a valid enum value', async () => {
     const res = await PATCH(patchRequest(makePayload({ difficulty: 'INSANE' })), routeParams)
     expect(res.status).toBe(400)
+  })
+
+  it('persists subtopicId when provided directly', async () => {
+    await PATCH(patchRequest(makePayload({ subtopicId: 'st-existing' })), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subtopicId: 'st-existing' }),
+      })
+    )
+    expect(dbMock.subtopic.upsert).not.toHaveBeenCalled()
+  })
+
+  it('upserts a Subtopic and persists its id when newSubtopicName is provided', async () => {
+    await PATCH(patchRequest(makePayload({ newSubtopicName: 'Fresh Subtopic' })), routeParams)
+    expect(dbMock.subtopic.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { chapterId_name: { chapterId: 'ch-1', name: 'Fresh Subtopic' } },
+      })
+    )
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subtopicId: 'st-new', subtopicName: 'Fresh Subtopic' }),
+      })
+    )
+  })
+
+  it('returns 400 when both subtopicId and newSubtopicName are provided', async () => {
+    const res = await PATCH(patchRequest(makePayload({ subtopicId: 'st-1', newSubtopicName: 'Other' })), routeParams)
+    expect(res.status).toBe(400)
+  })
+
+  it('clears subtopic to null when neither subtopic field is provided', async () => {
+    await PATCH(patchRequest(makePayload()), routeParams)
+    expect(dbMock.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subtopicId: null, subtopicName: null }),
+      })
+    )
   })
 
   it('recomputes contentHash and passes it to db.question.update', async () => {
