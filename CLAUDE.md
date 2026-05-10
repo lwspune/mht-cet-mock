@@ -1,7 +1,7 @@
 # MHT CET Mock Platform — Project Guide
 
 ## What This Is
-Full-stack mock test platform for MHT CET (Physics, Chemistry, Maths only — no Biology).
+Full-stack mock test platform, currently serving MHT CET (Physics, Chemistry, Maths). Multi-course architecture: each `User` and `Mock` carries a `courseSlug`; all queries, subject dropdowns, and analytics are scoped to that course. New courses (NDA, IPMAT, etc.) are provisioned at DB level — no code changes needed.
 Two roles: **Teacher** (creates mocks, manages students) and **Student** (attempts mocks, views performance).
 
 ## Development Preferences
@@ -54,7 +54,7 @@ Two roles: **Teacher** (creates mocks, manages students) and **Student** (attemp
 /teacher/mocks           → mock list (+ Import button)
 /teacher/mocks/new       → create mock
 /teacher/mocks/[id]/edit → edit mock + manage questions + Reset All Attempts
-/teacher/frequency       → MHT CET chapter frequency table editor (pre-populated from PYQ data, editable)
+/teacher/frequency       → course-specific chapter frequency table editor (pre-populated from PYQ data, editable)
 
 /student/dashboard       → student home (subject accuracy bars + weak chapters + recent attempts)
 /student/mocks           → browse published mocks (Reattempt CTA if allowed)
@@ -99,15 +99,20 @@ Schema in `prisma/schema.prisma`. Key invariants:
 - `AttemptAnswer.selectedOptionId = null` means unattempted (not wrong)
 - Score: `+marksCorrect` (correct), `-marksWrong` (wrong + selected), `0` (null selectedOptionId)
 - Performance data is derived from `attempt_answers` joined with `chapters` — no denormalized counters
-- `Course` / `CourseSubjectConfig` / `ChapterFrequency` — course-aware score predictor. MHT CET course seeded with Physics=50m, Chem=50m, Maths=100m. `ChapterFrequency.pct` is teacher-editable; defaults computed from PYQ question distribution. Future courses: add a `Course` row + `CourseSubjectConfig` rows + re-run seed.
+- `User.courseSlug String @default("mht-cet")` — set at DB level when provisioning a teacher; students inherit it from their teacher on creation. GET `/api/students` auto-heals any drift if a teacher's slug is changed manually.
+- `Mock.courseSlug String @default("mht-cet")` — assigned server-side on create; all mock list/edit queries filter by it. Composite indexes on `[createdBy, courseSlug]` and `[isPublished, courseSlug]`.
+- `Course` / `CourseSubjectConfig` / `ChapterFrequency` — course-aware score predictor. MHT CET course seeded with Physics=50m, Chem=50m, Maths=100m. `ChapterFrequency.pct` is teacher-editable; defaults computed from PYQ question distribution. To add a new course: insert `Course` + `CourseSubjectConfig` rows in DB, run seed, set teacher's `courseSlug`.
 - `Mock.allowReattempt Boolean @default(false)` — teacher-controlled gate; when true, students may delete their submitted attempt and start fresh via `DELETE /api/attempts/[id]`
 - `Question.solution String?` — optional explanation, supports KaTeX. Populated by xlsx import; editable in QuestionEditor.
-- `Question.subtopicName String?` — nullable; populated from xlsx `Subtopic` column at import time. Manually-added questions have null.
+- `Subtopic` — normalised taxonomy under each chapter, unique on `(chapterId, name)`. Replaced free-text `Question.subtopicName` (dropped 2026-05-09). `Question.subtopicId` is the FK; `ON DELETE SET NULL`. xlsx import upserts subtopic rows on commit; teacher UI offers an autocomplete combobox seeded with existing names per chapter, accepting free text to mint a new subtopic.
 - `Question.pyqYear String?` — nullable; e.g. `"May'2021"`. Populated from xlsx `PYQ` column (optional column — absent means null). Editable in QuestionEditor. Existing 748 PYQ questions backfilled via SQL on 2026-05-02.
+- `Question.difficulty Difficulty @default(MODERATE)` — non-null enum (`EASY` / `MODERATE` / `HARD`). Editable via segmented control in QuestionEditor. Not part of the xlsx import contract yet.
+- `Question.contentHash String` — non-null sha256 over normalised text + sorted option texts + original A/B/C/D label of the correct option. Recomputed on every POST/PATCH/import write. Infrastructure for future dedup / question-library reuse; no UI today and no unique index (variant questions are legitimate).
 - Deleting a `Mock` cascades to `Question`, `MockAttempt` → `AttemptAnswer` (full cascade chain). `AttemptAnswer.questionId` is CASCADE (not RESTRICT) — critical for mock deletion to work when attempts exist.
 
-After schema changes: `npx prisma db push` then `npx prisma generate`
-> Local dev workaround: if VSCode holds the Prisma engine DLL, use `npx prisma generate --no-engine` to unblock. Do NOT use `--no-engine` in CI or production builds — it produces a client that requires a `prisma://` Accelerate URL.
+After schema changes: `npx prisma migrate dev --name <slug>` (preferred) or `npx prisma db push` for trivial drift, then `npm run db:generate`. Migration history was rebaselined to a single `0_baseline_post_db_push` on 2026-05-09 — keep using `migrate dev` from here on.
+> `postinstall` runs `prisma generate --no-engine` (required for Vercel/Accelerate). After any local `npm install`, run `npm run db:generate` to restore the full engine for local dev. Do NOT use `--no-engine` manually — it produces a client that requires a `prisma://` URL and breaks local dev.
+> Drop-column migrations require interactive confirmation; `prisma migrate dev` blocks in non-TTY shells. Write the SQL manually in `prisma/migrations/<timestamp>_<slug>/migration.sql` and apply via `npx prisma migrate deploy`.
 
 ## Creating Students (Teacher flow)
 Students are created via Supabase Admin API, **not** self-signup:
@@ -145,24 +150,28 @@ DIRECT_URL                      # Same as DATABASE_URL for this project
 ```bash
 npm run dev          # start dev server
 npm run db:push      # push schema changes to Supabase
+npm run db:generate  # regenerate Prisma client with full engine (run after npm install)
 npm run db:seed      # seed subjects, chapters, MHT CET course config + chapter frequencies (idempotent)
 npx prisma studio    # browse DB in browser
-npx vitest           # run all tests (132 tests, 10 suites)
-npx vitest run       # run once (no watch mode)
+npx vitest run       # run all tests (135 tests, 11 suites)
+npx vitest           # run in watch mode
 ```
 
 ## Key Files
 | File | Purpose |
 |---|---|
 | `src/lib/auth.ts` | Auth helpers (see Auth Pattern above) |
-| `src/lib/db.ts` | Prisma client singleton |
+| `src/lib/db.ts` | Prisma client singleton — uses `withAccelerate()` only when `DATABASE_URL` starts with `prisma://`; falls back to plain `PrismaClient` for local postgres:// dev |
+| `src/lib/utils.ts` | `cn()` (class merge) + `formatCourseSlug(slug)` — converts `'mht-cet'` → `'MHT CET'` for display |
 | `src/lib/performance.ts` | 7 query functions: 4 for performance tabs + `getDashboardInsights` + `getProjectedScores(studentId, courseSlug, mode, recentN)` + `getSubjectFrequencies` |
 | `src/lib/scoring.ts` | `rescoreSubmittedAttempts(mockId, tx)` — recomputes `AttemptAnswer.isCorrect` + `MockAttempt.score/maxScore` for all SUBMITTED attempts; called inside PATCH question transaction |
 | `src/lib/supabase/server.ts` | `createClient()` + `createAdminClient()` |
 | `src/middleware.ts` | Session refresh on every request |
 | `src/app/student/performance/PerformanceTabs.tsx` | Client shell for all 5 performance tabs + subject filter |
 | `src/components/math/KatexRenderer.tsx` | KaTeX renderer |
-| `src/components/teacher/QuestionEditor.tsx` | Question add/edit with live KaTeX preview + image upload |
+| `src/components/teacher/QuestionEditor.tsx` | Question add/edit with live KaTeX preview + image upload + difficulty selector + subtopic combobox (filtered per chapter, accepts new entries) |
+| `src/lib/questions/hash.ts` | `computeContentHash` / `computeContentHashFromOptions` — sha256 over normalised text + sorted options + correct A/B/C/D label. Mirror this exactly if syncing question content to the public Question Bank. |
+| `scripts/backfill-content-hash.ts` | One-shot tsx script that hashed the existing 748 questions on 2026-05-09. Idempotent; rerunnable. Run with `npx ts-node --project tsconfig.seed.json scripts/backfill-content-hash.ts`. |
 | `src/components/teacher/QuestionEditDialog.tsx` | Edit/delete question dialog (pencil icon on question list) |
 | `src/components/teacher/MockForm.tsx` | Mock settings form — title, duration, marks, allowReattempt checkbox |
 | `src/components/teacher/AddStudentDialog.tsx` | Add student modal |
@@ -198,28 +207,35 @@ Teacher uploads a `.xlsx` file (MHT CET exam format) via the Import button on `/
 ### xlsx Column Contract
 Required headers (exact): `Q`, `Subject`, `Course`, `Chapter`, `Subtopic`, `Question Context`, `Question`, `OptionA`, `OptionB`, `OptionC`, `OptionD`, `Answer`, `Solution`, `Difficulty Level`
 
+The `Difficulty Level` column is currently parsed but not persisted — `Question.difficulty` is set per-row in the manual UI. Wiring import → DB difficulty is a follow-up.
+
 Optional header: `PYQ` — year string (e.g. `"2021"`). When present and non-empty, stored as-is in `Question.pyqYear`. Absent or blank → `null`. Legacy xlsx files without this column import without error.
+
+On commit, the import route upserts a `Subtopic` row per `(chapterId, Subtopic name)` and links the question via `subtopicId`. A `contentHash` is computed for every question.
 
 ### Known Edge Cases
 - Empty option cells (e.g. Q117 Maths/Limits OptionC blank) → replaced with `—` placeholder at parse time
 - Chapter appears under wrong subject in xlsx (e.g. "Magnetic Materials" listed under Chemistry) → cross-resolved to correct subject, warning emitted, teacher can Skip
 - Answer letter must be A/B/C/D (case-insensitive); invalid answer → question skipped with warning
-- Empty `Subtopic` cell → stored as `null` (not empty string); questions group by `chapterName` as fallback in performance UI
+- Empty `Subtopic` cell → stored as `subtopicId: null` on the question; performance UI groups by `chapterName` as fallback when subtopic is null
 - Empty `PYQ` cell → stored as `null` (not empty string)
 
 ## Tests
 Vitest with `@/` alias pointing to `src/`. Tests mock `@/lib/db` — the real Prisma client requires a live DB URL which isn't available in test environment.
 
-**132 tests, 10 suites** — `npx vitest run`
+**165 tests, 13 suites** — `npx vitest run`
 
 | File | Coverage |
 |---|---|
 | `src/lib/__tests__/import-utils.test.ts` | `convertLatex`, `answerLetterToIndex`, `deriveTitleFromFilename` (22 tests) |
 | `src/lib/__tests__/performance.test.ts` | `getDashboardInsights` — subject accuracy, weak chapters, sort order (6 tests) |
 | `src/lib/__tests__/projected-scores.test.ts` | `getProjectedScores` — accuracy, not-tested, gap sort, milestones + recent mode (13 tests) |
-| `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (20 tests, incl. subtopicName + pyqYear) |
-| `src/app/api/mocks/import/__tests__/import.test.ts` | import route validation + DB write shape (20 tests, incl. subtopicName + solution + pyqYear) |
-| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution + pyqYear + rescore (18 tests) |
+| `src/app/api/mocks/import/__tests__/parse.test.ts` | parse route end-to-end with real xlsx (20 tests, incl. subtopicName-on-DTO + pyqYear) |
+| `src/app/api/mocks/import/__tests__/import.test.ts` | import route — courseSlug validation, NDA teacher rejects foreign subject, subtopic upsert + FK, contentHash (24 tests) |
+| `src/app/api/mocks/__tests__/mocks.test.ts` | POST /api/mocks — foreign subjectId rejected (1 test) |
+| `src/app/api/mocks/[id]/questions/__tests__/question.test.ts` | PATCH + DELETE question — auth, validation, 404/409, solution + pyqYear + difficulty + subtopic (id/new) + contentHash + rescore (26 tests) |
+| `src/app/api/mocks/[id]/questions/__tests__/post.test.ts` | POST question — auth, validation, difficulty, subtopic (id/new/conflict), contentHash (10 tests) |
+| `src/lib/questions/__tests__/hash.test.ts` | `computeContentHash` — determinism, normalisation (case + whitespace), option-order independence, label sensitivity (10 tests) |
 | `src/app/api/mocks/[id]/attempts/__tests__/attempts.test.ts` | DELETE bulk-reset — auth, ownership, count (4 tests) |
 | `src/app/api/attempts/__tests__/attempt.test.ts` | DELETE attempt — teacher + student auth paths, allowReattempt gate (8 tests) |
 | `src/app/api/attempts/[id]/questions/__tests__/questions.test.ts` | GET questions with filter — auth, filter values (9 tests) |
@@ -259,7 +275,7 @@ Shows a PCM combined total card + 3 per-subject `ProjectedScoreCard`s. Each card
 
 **Algorithm:** `projected = (correct / total) × marksAtStake` per chapter. `marksAtStake = (pct / 100) × subjectMaxMarks`. `getProjectedScores` accepts `mode: 'all' | 'recent'` and `recentN = 3`; in recent mode it fetches the last N `MockAttempt` IDs per subject before filtering answers.
 
-**Teacher frequency editor** at `/teacher/frequency` — editable pct per chapter per subject, must sum to 100%. "Reset to PYQ Defaults" button recomputes from live PYQ question distribution via `PUT /api/course/mht-cet/frequency`.
+**Teacher frequency editor** at `/teacher/frequency` — editable pct per chapter per subject, must sum to 100%. "Reset to PYQ Defaults" button recomputes from live PYQ question distribution via `PUT /api/course/[courseSlug]/frequency`.
 
 ### Answer Key Correction + Rescore
 When a teacher edits a question via `PATCH /api/mocks/[id]/questions/[questionId]`, all SUBMITTED attempts for that mock are rescored atomically in the same interactive transaction. `rescoreSubmittedAttempts` (in `src/lib/scoring.ts`) recomputes `AttemptAnswer.isCorrect` from the updated `Option.isCorrect` values and recalculates `MockAttempt.score` + `maxScore` from scratch. Response includes `rescoredAttempts: number`.
@@ -289,7 +305,7 @@ The `prisma/seed.ts` script seeds subjects + chapters + MHT CET course config + 
 Direct Postgres (port 5432) is unreachable from Vercel. Supabase pooler (both session and transaction modes) gives "Tenant or user not found". Solution: **Prisma Accelerate**.
 
 - `@prisma/extension-accelerate` is installed
-- `src/lib/db.ts` uses `withAccelerate()` cast to `PrismaClient` to preserve TypeScript types
+- `src/lib/db.ts` uses `withAccelerate()` only when `DATABASE_URL` starts with `prisma://` (Vercel); plain `PrismaClient` otherwise (local dev)
 - `DATABASE_URL` in Vercel = `prisma://accelerate.prisma-data.net/?api_key=...`
 - `DIRECT_URL` in Vercel = direct Supabase URL (for local `prisma db push` / `db seed` only)
 - Prisma console: console.prisma.io → MHT_CET project → MHT_CET environment (NOT "Development" — that is an empty Prisma-hosted DB)
